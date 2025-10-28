@@ -1,0 +1,91 @@
+/* Theme oscuro (equivalente a Material3 seed #00E5A8) */
+:root{
+  --bg: #0E1116;
+  --surface: #141920;
+  --surface-2: #1A212A;
+  --primary: #00E5A8;
+  --on-primary: #001B13;
+  --text: #E6EAF0;
+  --text-weak: #A9B1BD;
+  --outline: #2A3340;
+  --outline-variant: #384352;
+  --ok: #61d095;
+  --error: #ffb4ab;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font: 500 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+}
+a{color:var(--primary); text-decoration:none}
+a:hover{text-decoration:underline}
+
+.container{width:min(1100px, 92%); margin-inline:auto}
+
+.topbar{
+  position:sticky; top:0; z-index:50;
+  background:linear-gradient(to bottom, rgba(14,17,22,.9), rgba(14,17,22,.65));
+  backdrop-filter: blur(8px);
+  border-bottom:1px solid var(--outline);
+}
+.topbar .container{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 0;
+}
+.brand{font-weight:800; letter-spacing:.3px; color:var(--text)}
+.nav{display:flex; gap:12px; align-items:center}
+.nav__link{padding:8px 10px; color:var(--text-weak); border-radius:10px}
+.nav__link:hover{background:var(--surface-2); color:var(--text)}
+
+.footer{border-top:1px solid var(--outline); padding:18px 0; margin-top:24px}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--outline);
+  border-radius:18px;
+  padding:18px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.28);
+}
+
+.text-muted{color:var(--text-weak)}
+.mt-2{margin-top:12px}
+.mt-3{margin-top:16px}
+
+/* Campos */
+.field{display:flex; flex-direction:column; gap:8px; margin:14px 0}
+.field__label{font-weight:700}
+.field__box{
+  background: var(--surface);
+  border:1px solid var(--outline-variant);
+  border-radius:12px;
+  padding: 10px 12px;
+  transition:.2s border-color ease;
+}
+.field__input{
+  width:100%; background:transparent; color:var(--text);
+  border:none; outline:0; font-weight:600;
+}
+.field__box:focus-within{border-color:var(--primary)}
+
+/* Botones */
+.btn{
+  border-radius:14px; padding:12px 16px; border:1px solid transparent;
+  font-weight:800; cursor:pointer; transition:.16s transform ease, .2s box-shadow ease;
+}
+.btn:active{transform:scale(.98)}
+.btn--primary{
+  background:var(--primary); color:var(--on-primary); border-color:transparent;
+  box-shadow: 0 6px 14px rgba(0,0,0,.28);
+}
+.btn--text{
+  background:transparent; color:var(--primary);
+  border-color:transparent;
+}
+
+/* Snackbars */
+.snackbar{padding:10px 12px; border-radius:12px; border:1px solid var(--outline-variant); background:var(--surface-2)}
+.snackbar--ok{border-color: rgba(97,208,149,.35)}
+.snackbar--error{border-color: rgba(255,180,171,.45); color:var(--error)}

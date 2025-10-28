@@ -275,4 +275,4 @@
         <?php endif; ?>
     </body>
 </html>
-<?php /**PATH C:\Proyectos\cargahoraria\resources\views/welcome.blade.php ENDPATH**/ ?>
+<?php /**PATH C:\Proyecto\CargaHorariaFict\resources\views/welcome.blade.php ENDPATH**/ ?>
