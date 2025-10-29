@@ -1,9 +1,12 @@
 <?php
 
 namespace App\Http\Controllers;
-
-use App\Models\Bitacora;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
+use App\Models\Bitacora;
+
 
 class BitacoraController extends Controller
 {
@@ -63,4 +66,54 @@ class BitacoraController extends Controller
         $bitacora->delete();
         return response()->noContent();
     }
+
+    private function bitAudit(Request $r, string $accion, string $entidad, ?int $entidadId, array $meta = [], ?array $old = null, ?array $new = null): void
+{
+    try {
+        if (!class_exists(\App\Models\Bitacora::class) || !Schema::hasTable('bitacora')) {
+            Log::info('bitacora.skipped', ['accion'=>$accion, 'motivo'=>'sin modelo/tabla']);
+            return;
+        }
+
+        $row = [];
+
+        // Requeridos en tu controller
+        if (Schema::hasColumn('bitacora','accion'))      $row['accion'] = $accion;
+        if (Schema::hasColumn('bitacora','entidad'))     $row['entidad'] = $entidad;              // <- evita el "Falta entidad"
+        if (Schema::hasColumn('bitacora','entidad_id'))  $row['entidad_id'] = $entidadId;
+
+        // Usuario (según nombre de columna)
+        $uid = Auth::id();
+        if (Schema::hasColumn('bitacora','user_id'))     $row['user_id'] = $uid;
+        if (Schema::hasColumn('bitacora','usuario_id'))  $row['usuario_id'] = $uid;
+
+        // IP si existe
+        if (Schema::hasColumn('bitacora','ip'))          $row['ip'] = $r->ip();
+
+        // Fecha según columna disponible
+        $now = now();
+        if (Schema::hasColumn('bitacora','fecha_hora'))       $row['fecha_hora'] = $now;
+        elseif (Schema::hasColumn('bitacora','fecha_creacion')) $row['fecha_creacion'] = $now;
+        // (Si usas timestamps, Eloquent llenará created_at)
+
+        // Texto sencillo
+        if (Schema::hasColumn('bitacora','descripcion')) $row['descripcion'] = $meta['descripcion'] ?? null;
+
+        // JSONs según tu esquema real
+        if (Schema::hasColumn('bitacora','datos_anteriores')) $row['datos_anteriores'] = $old;
+        if (Schema::hasColumn('bitacora','datos_nuevos'))     $row['datos_nuevos']     = $new;
+
+        // Por compatibilidad con otros proyectos (si existiera 'detalle')
+        if (Schema::hasColumn('bitacora','detalle'))     $row['detalle'] = json_encode($meta, JSON_UNESCAPED_UNICODE);
+
+        \App\Models\Bitacora::create($row);
+        Log::info('bitacora.ok', ['accion'=>$accion, 'entidad'=>$entidad, 'entidad_id'=>$entidadId]);
+    } catch (\Throwable $e) {
+        Log::warning('bitacora.fail', [
+            'accion'=>$accion, 'entidad'=>$entidad, 'entidad_id'=>$entidadId,
+            'msg'=>$e->getMessage()
+        ]);
+        // Nunca romper el flujo por bitácora
+    }
+}
 }

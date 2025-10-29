@@ -12,10 +12,15 @@
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 6px 0;">Roles y permisos</h2>
-      <p class="text-muted mb-3">Gestión de roles (próximamente).</p>
-      <button class="btn btn--outline" disabled>En desarrollo</button>
-    </div>
+  <h2 style="margin:0 0 6px 0;">Roles y permisos</h2>
+  <p class="text-muted mb-3">Administra los roles y la asignación a usuarios.</p>
+
+  <a href="{{ route('roles.index') }}"
+     class="btn btn--primary">
+     Ir a Roles
+  </a>
+</div>
+
 
     <div class="card">
       <h2 style="margin:0 0 6px 0;">Períodos</h2>

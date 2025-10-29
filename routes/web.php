@@ -7,9 +7,42 @@ use App\Http\Controllers\{MateriaCarreraController, BloqueoAulaController, Dispo
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\{SesionDocenteTokenController, BitacoraController, ReaperturaHistorialController, ReporteCargaHorariaController};
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\CoordinadorController;
+
+Route::middleware(['web','auth'])->group(function () {
+    Route::get('/periodos/stats', [PeriodoAcademicoController::class, 'stats'])->name('periodos.stats');
+
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/periodos', [PeriodoAcademicoController::class, 'index'])->name('periodos.index');
+    Route::post('/periodos', [PeriodoAcademicoController::class, 'store'])->name('periodos.store');
+    Route::put('/periodos/{periodo}', [PeriodoAcademicoController::class, 'update'])->name('periodos.update');
+
+    // Cambios de estado
+    Route::patch('/periodos/{periodo}/estado', [PeriodoAcademicoController::class, 'cambiarEstado'])->name('periodos.estado');
+    Route::post('/periodos/{periodo}/reabrir', [PeriodoAcademicoController::class, 'reabrir'])->name('periodos.reabrir');
+});
+Route::get('/coordinador', [CoordinadorController::class, 'index'])
+    ->name('coordinador.dashboard')
+    ->middleware('auth');
 Route::get('/login',  [AuthController::class,'showLogin'])->name('login');
 Route::post('/login', [AuthController::class,'login'])->name('login.post');
 Route::post('/logout',[AuthController::class,'logout'])->name('logout');
+
+Route::middleware(['web','auth'])
+    ->prefix('admin/roles')
+    ->name('roles.')
+    ->group(function () {
+        Route::get('/',            [RolController::class,'index'])->name('index');
+        Route::post('/',           [RolController::class,'store'])->name('store');
+        Route::put('/{rol}',       [RolController::class,'update'])->name('update');
+        Route::patch('/{rol}/toggle', [RolController::class,'toggle'])->name('toggle');
+        Route::delete('/{rol}',    [RolController::class,'destroy'])->name('destroy');
+
+        Route::post('/asignar',    [RolController::class,'asignarRol'])->name('asignar');
+        Route::delete('/revocar',  [RolController::class,'revocarRol'])->name('revocar');
+    });
 
 Route::middleware(['web','auth'])->group(function () {
     // Dashboard admin
@@ -56,5 +89,5 @@ Route::apiResource('estudiantes', EstudianteController::class);
 Route::apiResource('carreras', CarreraController::class);
 
 Route::get('/', function () {
-    return view('welcome');
+    return view('auth.login');
 });

@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use Illuminate\Support\Facades\Schema;
 class CargaHoraria extends Model
 {
     protected $table = 'carga_horaria';
@@ -90,4 +90,21 @@ class CargaHoraria extends Model
 
         return $query;
     }
-}
+    public static function tieneAsignacionesAbiertas(int $periodoId): bool
+        {
+            // si aún no existe la tabla (fresh install), no bloquear
+        if (!Schema::hasTable('carga_horaria')) return false;
+
+        // Consideramos “abiertas” las que NO están anuladas
+        return static::where(function ($q) {
+                $q->whereNull('estado')
+                  ->orWhereIn('estado', ['Vigente','Modificado']);
+            })
+            ->whereHas('grupo', fn($q) => $q->where('id_periodo', $periodoId))
+            ->exists();
+        }
+
+    }
+
+    
+

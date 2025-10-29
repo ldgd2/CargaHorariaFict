@@ -17,12 +17,18 @@ return new class extends Migration {
             $table->string('estado_publicacion', 20)->default('Borrador'); // Borrador | Publicado | Reabierto
         });
 
+
+        DB::statement("ALTER TABLE periodo_academico
+            DROP CONSTRAINT IF EXISTS chk_periodo_estado_publicacion");
         // CHECK constraint (PostgreSQL)
         DB::statement("
             ALTER TABLE periodo_academico
             ADD CONSTRAINT chk_periodo_estado_publicacion
-            CHECK (estado_publicacion IN ('Borrador','Publicado','Reabierto'))
-        ");
+            CHECK (
+                LOWER(estado_publicacion) IN ('borrador','publicado','archivado')
+                AND (LOWER(estado_publicacion) = 'borrador' OR activo = false)
+            )"
+        );
     }
 
     public function down(): void

@@ -186,4 +186,6 @@ class CargaHorariaController extends Controller
         return 'No se pudo guardar la carga horaria (verifique conflictos y datos).';
       
     }
+
+    
 }

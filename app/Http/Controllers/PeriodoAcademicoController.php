@@ -3,61 +3,244 @@
 namespace App\Http\Controllers;
 
 use App\Models\PeriodoAcademico;
+use App\Models\CargaHoraria;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PeriodoAcademicoController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $r)
     {
-        $activos = $request->query('activo');
-        $estado  = $request->query('estado_publicacion');
-
-        $periodos = PeriodoAcademico::query()
-            ->when(!is_null($activos), fn($qb) => $qb->where('activo', filter_var($activos, FILTER_VALIDATE_BOOLEAN)))
-            ->when($estado, fn($qb) => $qb->where('estado_publicacion', $estado))
-            ->orderByDesc('fecha_inicio')
-            ->paginate($request->integer('per_page', 20));
-
-        return response()->json($periodos);
+        $periodos = PeriodoAcademico::orderByDesc('fecha_inicio')->paginate(12);
+        return view('periodos.index', compact('periodos'));
     }
 
-    public function store(Request $request)
+    /** Crear: queda BORRADOR + ACTIVO (cumple CU4) */
+    public function store(Request $r)
     {
-        $data = $request->validate([
-            'nombre'             => ['required','string','max:50','unique:periodo_academico,nombre'],
-            'fecha_inicio'       => ['required','date'],
-            'fecha_fin'          => ['required','date','after_or_equal:fecha_inicio'],
-            'activo'             => ['boolean'],
-            'estado_publicacion' => ['nullable', Rule::in(['Borrador','Publicado','Reabierto'])],
+        $data = $r->validate([
+            'nombre'       => ['required','string','max:120'],
+            'fecha_inicio' => ['required','date'],
+            'fecha_fin'    => ['required','date','after:fecha_inicio'],
         ]);
 
-        $periodo = PeriodoAcademico::create($data);
-        return response()->json($periodo, 201);
+        // solapamiento (vigentes = activo=true OR publicado)
+        if (PeriodoAcademico::haySolapamiento($data['fecha_inicio'], $data['fecha_fin'], null)) {
+            return back()->withErrors(['fecha_inicio' => 'Rango solapado con otro período vigente.'])->withInput();
+        }
+
+        // nombre único (case-insensitive)
+        if (PeriodoAcademico::nombreUsado($data['nombre'])) {
+            return back()->withErrors(['nombre' => 'Ya existe un período con ese nombre.'])->withInput();
+        }
+
+        DB::transaction(function () use ($data, $r) {
+            $row = PeriodoAcademico::create([
+                'nombre'              => $data['nombre'],
+                'fecha_inicio'        => $data['fecha_inicio'],
+                'fecha_fin'           => $data['fecha_fin'],
+                'estado_publicacion'  => 'borrador', // NUNCA 'activo' aquí
+                'activo'              => true,       // activo a true al crear
+            ]);
+
+            $this->bit('periodo_creado', 'periodo', $row->getKey(), [
+                'nuevo' => $row->only(['nombre','fecha_inicio','fecha_fin','estado_publicacion','activo'])
+            ], $r);
+        });
+
+        return back()->with('ok','Período creado (borrador) y ACTIVADO.');
     }
 
-    public function show(PeriodoAcademico $periodoAcademico)
+    /** Editar: prohibido si está publicado o archivado */
+    public function update(Request $r, PeriodoAcademico $periodo)
     {
-        return response()->json($periodoAcademico);
-    }
+        if (in_array($periodo->estado_publicacion, ['publicado','archivado'])) {
+            return back()->withErrors(['general'=>'No se puede editar un período publicado/archivado.'])->withInput();
+        }
 
-    public function update(Request $request, PeriodoAcademico $periodoAcademico)
-    {
-        $data = $request->validate([
-            'nombre'             => ['sometimes','string','max:50', Rule::unique('periodo_academico','nombre')->ignore($periodoAcademico->id_periodo,'id_periodo')],
-            'fecha_inicio'       => ['sometimes','date'],
-            'fecha_fin'          => ['sometimes','date','after_or_equal:fecha_inicio'],
-            'activo'             => ['sometimes','boolean'],
-            'estado_publicacion' => ['sometimes', Rule::in(['Borrador','Publicado','Reabierto'])],
+        $data = $r->validate([
+            'nombre'       => ['required','string','max:120'],
+            'fecha_inicio' => ['required','date'],
+            'fecha_fin'    => ['required','date','after:fecha_inicio'],
         ]);
 
-        $periodoAcademico->update($data);
-        return response()->json($periodoAcademico);
+        if (PeriodoAcademico::nombreUsado($data['nombre'], $periodo->getKey())) {
+            return back()->withErrors(['nombre' => 'Ya existe un período con ese nombre.'])->withInput();
+        }
+
+        if (PeriodoAcademico::haySolapamiento($data['fecha_inicio'], $data['fecha_fin'], $periodo->getKey())) {
+            return back()->withErrors(['fecha_inicio' => 'Rango solapado con otro período vigente.'])->withInput();
+        }
+
+        DB::transaction(function () use ($periodo, $data, $r) {
+            $antes = $periodo->only(['nombre','fecha_inicio','fecha_fin','estado_publicacion','activo']);
+
+            $periodo->update([
+                'nombre'       => $data['nombre'],
+                'fecha_inicio' => $data['fecha_inicio'],
+                'fecha_fin'    => $data['fecha_fin'],
+            ]);
+
+            $this->bit('periodo_actualizado', 'periodo', $periodo->getKey(), [
+                'antes'   => $antes,
+                'despues' => $periodo->only(['nombre','fecha_inicio','fecha_fin','estado_publicacion','activo'])
+            ], $r);
+        });
+
+        return back()->with('ok','Período actualizado.');
     }
 
-    public function destroy(PeriodoAcademico $periodoAcademico)
+    /**
+     * Cambios de estado:
+     * - 'activo'    => estado_publicacion sigue 'borrador', activo=true (valida solape)
+     * - 'borrador'  => sólo si estaba en borrador, activo=false (desactivar)
+     * - 'publicado' => estado_publicacion='publicado', activo=false (valida pendientes)
+     * - 'archivado' => estado_publicacion='archivado', activo=false (valida pendientes)
+     */
+    public function cambiarEstado(Request $r, PeriodoAcademico $periodo)
     {
-        $periodoAcademico->delete();
-        return response()->json(null, 204);
+        $data = $r->validate([
+            'estado' => ['required','in:activo,borrador,publicado,archivado'],
+        ]);
+
+        $target = $data['estado'];
+
+        // Activar (sigue en borrador pero activo=true)
+        if ($target === 'activo') {
+            if ($periodo->estado_publicacion !== 'borrador') {
+                return back()->withErrors(['estado'=>'Sólo se puede activar si está en borrador.']);
+            }
+            if ($periodo->activo) {
+                return back()->withErrors(['estado'=>'El período ya está activo.']);
+            }
+            if (PeriodoAcademico::haySolapamiento(
+                $periodo->fecha_inicio->toDateString(),
+                $periodo->fecha_fin->toDateString(),
+                $periodo->getKey()
+            )) {
+                return back()->withErrors(['estado'=>'No puede activarse: rango solapado con otro vigente.']);
+            }
+
+            DB::transaction(function () use ($periodo, $r) {
+                $periodo->activo = true;
+                $periodo->save();
+                $this->bit('periodo_activado', 'periodo', $periodo->getKey(), [], $r);
+            });
+            return back()->with('ok','Período ACTIVADO.');
+        }
+
+        // Desactivar (volver a borrador inactivo)
+        if ($target === 'borrador') {
+            if ($periodo->estado_publicacion !== 'borrador') {
+                return back()->withErrors(['estado'=>'Sólo se puede desactivar si está en borrador.']);
+            }
+            if (!$periodo->activo) {
+                return back()->withErrors(['estado'=>'El período ya está desactivado.']);
+            }
+
+            DB::transaction(function () use ($periodo, $r) {
+                $periodo->activo = false;
+                $periodo->save();
+                $this->bit('periodo_desactivado', 'periodo', $periodo->getKey(), [], $r);
+            });
+            return back()->with('ok','Período DESACTIVADO.');
+        }
+
+        // Publicar
+        if ($target === 'publicado') {
+            if (CargaHoraria::tieneAsignacionesAbiertas($periodo->getKey())) {
+                return back()->withErrors(['estado'=>'No puede publicarse: existen asignaciones pendientes.']);
+            }
+            DB::transaction(function () use ($periodo, $r) {
+                $periodo->estado_publicacion = 'publicado';
+                $periodo->activo = false;
+                $periodo->save();
+                $this->bit('periodo_publicado', 'periodo', $periodo->getKey(), [], $r);
+            });
+            return back()->with('ok','Período PUBLICADO.');
+        }
+
+        // Archivado
+        if (CargaHoraria::tieneAsignacionesAbiertas($periodo->getKey())) {
+            return back()->withErrors(['estado'=>'No puede archivarse: existen procesos abiertos.']);
+        }
+        DB::transaction(function () use ($periodo, $r) {
+            $periodo->estado_publicacion = 'archivado';
+            $periodo->activo = false;
+            $periodo->save();
+            $this->bit('periodo_archivado', 'periodo', $periodo->getKey(), [], $r);
+        });
+        return back()->with('ok','Período ARCHIVADO.');
     }
+
+    /** Reabrir publicado/archivado → vuelve a BORRADOR + ACTIVO=true */
+    public function reabrir(Request $r, PeriodoAcademico $periodo)
+    {
+        if (!in_array($periodo->estado_publicacion, ['publicado','archivado'])) {
+            return back()->withErrors(['estado'=>'Sólo se puede reabrir un período publicado/archivado.']);
+        }
+
+        if (PeriodoAcademico::haySolapamiento(
+            $periodo->fecha_inicio->toDateString(),
+            $periodo->fecha_fin->toDateString(),
+            $periodo->getKey()
+        )) {
+            return back()->withErrors(['estado'=>'No puede reabrirse: rango solapado con otro vigente.']);
+        }
+
+        DB::transaction(function () use ($periodo, $r) {
+            $periodo->estado_publicacion = 'borrador';
+            $periodo->activo = true;
+            $periodo->save();
+            $this->bit('periodo_reabierto', 'periodo', $periodo->getKey(), [
+                'motivo' => $r->input('motivo')
+            ], $r);
+        });
+
+        return back()->with('ok','Período reabierto a BORRADOR y ACTIVADO.');
+    }
+
+    /* ---------- Bitácora (si tienes tabla) ----------- */
+    private function bit(string $accion, string $entidad, ?int $entidadId, array $detalle, Request $r): void
+    {
+        try {
+            if (!class_exists(\App\Models\Bitacora::class)) return;
+
+            \App\Models\Bitacora::create([
+                'accion'        => $accion,
+                'usuario_id'    => Auth::id(),
+                'ip'            => $r->ip(),
+                'descripcion'   => json_encode($detalle, JSON_UNESCAPED_UNICODE),
+                'entidad'       => $entidad,
+                'entidad_id'    => $entidadId,
+                'fecha_creacion'=> now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('bitacora.fail', ['accion'=>$accion,'msg'=>$e->getMessage()]);
+        }
+    }
+
+    public function stats()
+{
+    // Postgres: contar con FILTER
+    $row = \DB::selectOne("
+        SELECT
+            COUNT(*)                                                        AS total,
+            COUNT(*) FILTER (WHERE estado_publicacion = 'borrador')         AS borrador,
+            COUNT(*) FILTER (WHERE estado_publicacion = 'publicado')        AS publicado,
+            COUNT(*) FILTER (WHERE estado_publicacion = 'archivado')        AS archivado,
+            COUNT(*) FILTER (WHERE activo)                                  AS activo
+        FROM periodo_academico
+    ");
+
+    return response()->json([
+        'total'      => (int)($row->total ?? 0),
+        'borrador'   => (int)($row->borrador ?? 0),
+        'activo'     => (int)($row->activo ?? 0),
+        'publicado'  => (int)($row->publicado ?? 0),
+        'archivado'  => (int)($row->archivado ?? 0),
+    ]);
+}
 }

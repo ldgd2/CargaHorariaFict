@@ -78,23 +78,6 @@
       </label>
     </div>
     
-    <div class="mb-4">
-  <label class="block text-sm font-semibold mb-1" for="entidad">Entidad</label>
-  <input
-    id="entidad"
-    name="entidad"
-    type="text"
-    value="{{ old('entidad') }}"
-    required
-    class="w-full px-4 py-3 rounded-xl bg-[#141920] border border-zinc-700 focus:border-emerald-400 outline-none text-sm"
-    placeholder="Ej: UAGRM, Dirección Académica, etc."
-  >
-  @error('entidad')
-    <p class="text-red-400 text-xs mt-1">{{ $message }}</p>
-  @enderror
-</div>
-
-
     <div class="mt-3" style="display:flex; gap:12px;">
       <button type="submit" class="btn btn--primary">Guardar</button>
       <a href="{{ route('admin.dashboard') }}" class="btn btn--text">Cancelar</a>
