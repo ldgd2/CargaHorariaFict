@@ -13,16 +13,7 @@ Route::middleware(['web','auth'])->group(function () {
     Route::get('/periodos/stats', [PeriodoAcademicoController::class, 'stats'])->name('periodos.stats');
 
 });
-
-Route::middleware(['auth'])->group(function () {
-    Route::get('/periodos', [PeriodoAcademicoController::class, 'index'])->name('periodos.index');
-    Route::post('/periodos', [PeriodoAcademicoController::class, 'store'])->name('periodos.store');
-    Route::put('/periodos/{periodo}', [PeriodoAcademicoController::class, 'update'])->name('periodos.update');
-
-    // Cambios de estado
-    Route::patch('/periodos/{periodo}/estado', [PeriodoAcademicoController::class, 'cambiarEstado'])->name('periodos.estado');
-    Route::post('/periodos/{periodo}/reabrir', [PeriodoAcademicoController::class, 'reabrir'])->name('periodos.reabrir');
-});
+ 
 Route::get('/coordinador', [CoordinadorController::class, 'index'])
     ->name('coordinador.dashboard')
     ->middleware('auth');
@@ -44,17 +35,38 @@ Route::middleware(['web','auth'])
         Route::delete('/revocar',  [RolController::class,'revocarRol'])->name('revocar');
     });
 
-Route::middleware(['web','auth'])->group(function () {
-    // Dashboard admin
-    Route::get('/admin', [\App\Http\Controllers\AdminController::class, 'dashboard'])
-        ->name('admin.dashboard');
+Route::middleware(['web','auth'])
+  ->prefix('admin')
+  ->as('admin.')
+  ->group(function () {
+    // Dashboard
+    Route::get('/', [AdminController::class,'dashboard'])->name('dashboard');
 
-    // CU1: Registrar usuario (vista + post)
-    Route::get('/admin/usuarios/signup', [UsuarioController::class, 'create'])
-        ->name('usuarios.signup'); // Gate::before ya te deja pasar por ser Admin
+    // Usuarios (signup + import)
+    Route::get('/usuarios/signup', [UsuarioController::class,'create'])->name('usuarios.signup');
+    Route::post('/usuarios/signup', [UsuarioController::class,'storeSignup'])->name('usuarios.signup.post');
+    Route::post('/usuarios/import', [UsuarioController::class,'import'])->name('usuarios.import');
 
-    Route::post('/admin/usuarios/signup', [UsuarioController::class, 'storeSignup'])
-        ->name('usuarios.signup.post');
+    // Carreras (página y API)
+    Route::get('/carreras/view', [CarreraController::class,'view'])->name('carreras.view');
+    Route::get('/carreras',        [CarreraController::class,'index'])->name('carreras.index');
+    Route::post('/carreras',       [CarreraController::class,'store'])->name('carreras.store');
+    Route::put('/carreras/{carrera}',   [CarreraController::class,'update'])->name('carreras.update');
+    Route::patch('/carreras/{carrera}/toggle', [CarreraController::class,'toggle'])->name('carreras.toggle');
+
+    // Docentes (sólo API para listados)
+    Route::get('/docentes',  [DocenteController::class,'index'])->name('docentes.index');
+
+    // (Si ya tienes vistas para materias/aulas, mantenlas aquí)
+    Route::get('/materias',  [MateriaController::class,'index'])->name('materias.index');
+    Route::get('/aulas',     [AulaController::class,'index'])->name('aulas.index');
+
+    // Periodos (dentro de admin)
+    Route::get('/periodos',        [PeriodoAcademicoController::class,'index'])->name('periodos.index');
+    Route::post('/periodos',       [PeriodoAcademicoController::class,'store'])->name('periodos.store');
+    Route::put('/periodos/{periodo}', [PeriodoAcademicoController::class,'update'])->name('periodos.update');
+    Route::patch('/periodos/{periodo}/estado', [PeriodoAcademicoController::class,'cambiarEstado'])->name('periodos.estado');
+    Route::post('/periodos/{periodo}/reabrir', [PeriodoAcademicoController::class,'reabrir'])->name('periodos.reabrir');
 });
 
 Route::apiResource('sesiones-tokens', SesionDocenteTokenController::class);

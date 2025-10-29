@@ -4,7 +4,7 @@
 
 @section('content')
 <style>
-  /* Layout apilado y limpio para móvil */
+
   .coor-stack{display:grid;gap:16px}
   .coor-top{display:grid;gap:16px}
   .coor-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;padding:16px}
@@ -12,7 +12,7 @@
   .coor-kpi h4{margin:0 0 4px 0;font-weight:700}
   .coor-kpi .num{font-size:28px;font-weight:800}
 
-  /* Tabla responsive (solo desktop) */
+
   .coor-table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--color-outline-variant);border-radius:var(--radius-s)}
   .coor-th,.coor-td{padding:8px 10px;text-align:left;vertical-align:middle}
   .coor-recent thead{background:rgba(255,255,255,.03)}
@@ -115,12 +115,11 @@
   </div>
 
   {{-- KPIs (con auto-actualización) --}}
-  {{-- KPIs (con auto-actualización) --}}
-{{-- KPIs (con auto-actualización) --}}
+
 @php
   $statsUrl = \Illuminate\Support\Facades\Route::has('periodos.stats')
       ? route('periodos.stats')
-      : url('/periodos/stats'); // fallback si aún no está cacheada
+      : url('/periodos/stats'); 
 @endphp
 
 <div class="card" style="padding:0;" data-stats-url="{{ $statsUrl }}">
@@ -164,7 +163,7 @@
                 $b = match($st){
                   'borrador'=>'badge--outline','activo'=>'badge--tonal',
                   'publicado'=>'badge--primary','archivado'=>'badge--text', default=>'badge--outline'
-                };
+                }; 
               @endphp
               <tr>
                 <td class="coor-td">{{ $p->nombre ?? '—' }}</td>

@@ -7,21 +7,39 @@ use Illuminate\Database\Eloquent\Model;
 class Estudiante extends Model
 {
     protected $table = 'estudiante';
-    protected $primaryKey = 'id_estudiante';
+
+    // PK del negocio
+    protected $primaryKey = 'codigo_universitario';
+    public $incrementing = false;      // PK string
+    protected $keyType = 'string';
     public $timestamps = false;
+
     protected $fillable = [
-        'id_estudiante', // PK = FK a usuario
-        'codigo_universitario',
+        'codigo_universitario', // PK
+        'id_usuario',           // FK -> usuario.id_usuario 
         'carrera',
         'semestre',
     ];
 
-    public $incrementing = true; // SERIAL en BD
+    // Relación 1:1 con Usuario
+    public function usuario()
+    {
+        return $this->belongsTo(Usuario::class, 'id_usuario', 'id_usuario');
+    }
 
-    // Relación (si usas tabla MATRICULA)
+    
     public function grupos()
     {
-        return $this->belongsToMany(Grupo::class, 'matricula', 'id_estudiante', 'id_grupo')
-                    ->withPivot(['fecha_inscripcion']);
+        return $this->belongsToMany(
+            Grupo::class,
+            'matricula',
+            'codigo_universitario', // FK en matrícula hacia Estudiante
+            'id_grupo'              // FK en matrícula hacia Grupo
+        )->withPivot(['fecha_inscripcion']);
     }
+
+  
+    protected $casts = [
+        'semestre' => 'integer',
+    ];
 }

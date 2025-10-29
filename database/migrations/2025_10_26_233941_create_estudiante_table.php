@@ -8,21 +8,31 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('estudiante', function (Blueprint $table) {
-            // PK que además es FK a usuario(id_usuario)
-            $table->unsignedInteger('id_estudiante')->primary();
+            // PK elegida por el negocio
+            $table->string('codigo_universitario', 20)->primary();
 
-            $table->string('codigo_universitario', 20)->unique();
+            // Relación 1:1 con usuario: si se borra el usuario, se borra el estudiante
+            $table->unsignedBigInteger('id_usuario')->unique();
+
+            // Datos de estudiante
             $table->string('carrera', 100);
             $table->integer('semestre')->nullable();
 
-            $table->foreign('id_estudiante')
+            // Clave foránea a usuario(id_usuario) con cascada
+            $table->foreign('id_usuario')
                 ->references('id_usuario')->on('usuario')
+                ->onUpdate('cascade')
                 ->onDelete('cascade');
         });
     }
 
     public function down(): void
     {
+        Schema::table('estudiante', function (Blueprint $table) {
+       
+            $table->dropForeign(['id_usuario']);
+        });
+
         Schema::dropIfExists('estudiante');
     }
 };

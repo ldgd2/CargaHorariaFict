@@ -3,48 +3,81 @@
 namespace App\Http\Controllers;
 
 use App\Models\Carrera;
+use App\Models\Materia;
+use App\Models\Grupo;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use App\Http\Controllers\Concerns\LogsBitacora;
 
 class CarreraController extends Controller
 {
-    public function index()
+    use LogsBitacora;
+
+
+    public function view()
     {
-        return Carrera::with('jefeDocente')->orderBy('nombre')->get();
+        return view('usuarios.admin.admin.carreras.index');
     }
 
-    public function show(Carrera $carrera)
-    {
-        return $carrera->load('jefeDocente');
+
+    public function index(Request $r)
+{
+    $q   = $r->get('q');
+    $per = max(1, (int) $r->get('per_page', 20));
+
+    return Carrera::query()
+        ->when($q, fn($qb) => $qb->where('nombre','ilike',"%{$q}%"))
+        ->with(['jefe.usuario:id_usuario,nombre']) 
+        ->orderBy('nombre')
+        ->paginate($per);
+}
+
+public function store(Request $r)
+{
+    $data = $r->validate([
+        'nombre'          => ['required','string','max:120'],
+        'habilitado'      => ['sometimes','boolean'],
+        'jefe_docente_id' => ['nullable','integer','exists:docente,id_docente'],
+    ]);
+
+    $car = Carrera::create($data + ['habilitado' => $data['habilitado'] ?? true]);
+    if (method_exists($this, 'logAction')) {
+        $this->logAction('carrera_creada','carrera',$car->id_carrera,$data);
     }
 
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'nombre' => ['required','string','max:120','unique:carrera,nombre'],
-            'jefe_docente_id' => ['nullable','integer','exists:docente,id_docente'],
-            'habilitado' => ['boolean'],
-        ]);
+    return response()->json($car->load('jefe.usuario'), 201);
+}
 
-        $carrera = Carrera::create($data);
-        return response()->json($carrera->load('jefeDocente'), 201);
+    public function update(Request $r, Carrera $carrera)
+{
+    $data = $r->validate([
+        'nombre'          => ['sometimes','string','max:120'],
+        'jefe_docente_id' => ['nullable','integer','exists:docente,id_docente'],
+        'habilitado'      => ['sometimes','boolean'],
+    ]);
+
+    $carrera->update($data);
+
+    if (method_exists($this, 'logAction')) {
+        $this->logAction('carrera_editada','carrera',$carrera->id_carrera,$data);
     }
 
-    public function update(Request $request, Carrera $carrera)
-    {
-        $data = $request->validate([
-            'nombre' => ['sometimes','string','max:120', Rule::unique('carrera','nombre')->ignore($carrera->id_carrera,'id_carrera')],
-            'jefe_docente_id' => ['nullable','integer','exists:docente,id_docente'],
-            'habilitado' => ['sometimes','boolean'],
-        ]);
+    return $carrera->load('jefe.usuario');
+}
 
-        $carrera->update($data);
-        return $carrera->load('jefeDocente');
-    }
-
-    public function destroy(Carrera $carrera)
+    public function toggle(Carrera $carrera)
     {
-        $carrera->delete();
-        return response()->noContent();
+        if ($carrera->habilitado) {
+            $tieneMaterias = Materia::where('id_carrera',$carrera->id_carrera)->exists();
+            $tieneGrupos   = Grupo::where('id_carrera',$carrera->id_carrera)->exists();
+            if ($tieneMaterias || $tieneGrupos) {
+                return response()->json(['ok'=>false,'error'=>'No se puede desactivar: tiene materias/grupos asociados.'],422);
+            }
+        }
+        $carrera->habilitado = !$carrera->habilitado;
+        $carrera->save();
+        $this->logAction($carrera->habilitado?'carrera_activada':'carrera_desactivada','carrera',$carrera->id_carrera,[]);
+
+        return $carrera->load('jefe:id_docente,nombre');
     }
 }

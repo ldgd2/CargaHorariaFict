@@ -9,7 +9,7 @@ class Docente extends Model
     protected $table = 'docente';
     protected $primaryKey = 'id_docente';
     public $timestamps = false;
-
+    protected $appends = ['nombre'];
     protected $fillable = [
         'id_docente','nro_documento','tipo_contrato',
         'carrera_principal','tope_horas_semana','habilitado'
@@ -23,5 +23,18 @@ class Docente extends Model
     public function usuario()
     {
         return $this->belongsTo(Usuario::class, 'id_docente', 'id_usuario');
+    }
+
+    public function getNombreAttribute()
+    {
+   
+        if (array_key_exists('nombre', $this->attributes) && $this->attributes['nombre']) {
+            return $this->attributes['nombre'];
+        }
+      
+        $n = trim(($this->attributes['nombres'] ?? '').' '.($this->attributes['apellidos'] ?? ''));
+        if ($n !== '') return $n;
+
+        return 'Docente #'.$this->attributes[$this->primaryKey];
     }
 }

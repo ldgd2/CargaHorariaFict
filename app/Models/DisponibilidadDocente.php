@@ -15,7 +15,7 @@ class DisponibilidadDocente extends Model
     ];
 
     protected $casts = [
-        // horas como string; la BD usa TIME
+        
         'prioridad' => 'integer',
         'dia_semana'=> 'integer',
     ];

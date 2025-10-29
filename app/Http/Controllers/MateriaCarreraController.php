@@ -5,67 +5,39 @@ namespace App\Http\Controllers;
 use App\Models\MateriaCarrera;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Database\QueryException;
+use App\Http\Controllers\Concerns\LogsBitacora;
 
 class MateriaCarreraController extends Controller
 {
-    public function index(Request $request)
+    use LogsBitacora;
+
+    public function index(Request $r)
     {
-        $query = MateriaCarrera::query();
-
-        if ($request->filled('id_materia')) {
-            $query->where('id_materia', $request->id_materia);
-        }
-        if ($request->filled('id_carrera')) {
-            $query->where('id_carrera', $request->id_carrera);
-        }
-
-        return response()->json($query->get());
+        return MateriaCarrera::with(['materia','carrera'])
+            ->orderByDesc('id')
+            ->paginate($r->integer('per_page',20));
     }
 
-    public function store(Request $request)
+    public function store(Request $r)
     {
-        $data = $request->validate([
-            'id_materia' => ['required','integer'],
-            'id_carrera' => ['required','integer'],
+        $data = $r->validate([
+            'id_materia' => ['required','integer','exists:materia,id_materia'],
+            'id_carrera' => ['required','integer','exists:carrera,id_carrera'],
         ]);
 
-        try {
-            $mc = MateriaCarrera::create($data);
-            return response()->json($mc, 201);
-        } catch (QueryException $e) {
-            return response()->json([
-                'message' => 'No se pudo crear la relación (¿duplicada o FK inválida?).',
-                'error'   => $e->getMessage(),
-            ], 422);
-        }
+        $exists = MateriaCarrera::where($data)->exists();
+        if ($exists) return response()->json(['ok'=>false,'error'=>'Ya existe el vínculo materia↔carrera.'],422);
+
+        $mc = MateriaCarrera::create($data);
+        $this->logAction('materia_carrera_creada','materia_carrera',$mc->id,$data);
+        return response()->json($mc,201);
     }
 
-    // Para claves compuestas, recibimos ambos ids en la ruta
-    public function show($idMateria, $idCarrera)
+    public function destroy(MateriaCarrera $materiaCarrera)
     {
-        $mc = MateriaCarrera::where('id_materia', $idMateria)
-            ->where('id_carrera', $idCarrera)
-            ->first();
-
-        if (!$mc) {
-            return response()->json(['message' => 'No encontrado'], 404);
-        }
-
-        return response()->json($mc);
-    }
-
-    public function destroy($idMateria, $idCarrera)
-    {
-        $mc = MateriaCarrera::where('id_materia', $idMateria)
-            ->where('id_carrera', $idCarrera)
-            ->first();
-
-        if (!$mc) {
-            return response()->json(['message' => 'No encontrado'], 404);
-        }
-
-        $mc->delete();
-        return response()->json(['message' => 'Eliminado']);
+        $id = $materiaCarrera->id;
+        $materiaCarrera->delete();
+        $this->logAction('materia_carrera_eliminada','materia_carrera',$id,[]);
+        return response()->json(null,204);
     }
 }

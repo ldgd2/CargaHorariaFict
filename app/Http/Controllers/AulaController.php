@@ -3,73 +3,67 @@
 namespace App\Http\Controllers;
 
 use App\Models\Aula;
+use App\Models\CargaHoraria;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use App\Http\Controllers\Concerns\LogsBitacora;
 
 class AulaController extends Controller
 {
-    public function index(Request $request)
+    use LogsBitacora;
+
+    public function index(Request $r)
     {
-        $q = $request->get('q');
-        $estado = $request->get('estado');
-        $habilitado = $request->boolean('habilitado', null);
-
-        $aulas = Aula::query()
-            ->when($q, fn($qb) =>
-                $qb->where('nombre_aula', 'ilike', "%{$q}%")
-                   ->orWhere('ubicacion', 'ilike', "%{$q}%"))
-            ->when($estado, fn($qb) => $qb->where('tipo_aula', $estado))
-            ->when(!is_null($habilitado), fn($qb) => $qb->where('habilitado', $habilitado))
-            ->orderBy('nombre_aula')
-            ->paginate($request->integer('per_page', 20));
-
-        return response()->json($aulas);
+        $q = $r->get('q');
+        return Aula::query()
+            ->when($q, fn($qb)=> $qb->where('nombre','ilike',"%{$q}%")
+                                     ->orWhere('codigo','ilike',"%{$q}%")
+                                     ->orWhere('ubicacion','ilike',"%{$q}%"))
+            ->orderBy('codigo')
+            ->paginate($r->integer('per_page',20));
     }
 
-    public function store(Request $request)
+    public function store(Request $r)
     {
-        $data = $request->validate([
-            'nombre_aula' => ['required','string','max:50','unique:aula,nombre_aula'],
-            'capacidad'   => ['nullable','integer','min:1'],
-            'tipo_aula'   => ['nullable','string','max:30'],
-            'ubicacion'   => ['nullable','string','max:100'],
-            'habilitado'  => ['boolean'],
+        $data = $r->validate([
+            'codigo'    => ['required','string','max:20','unique:aula,codigo'],
+            'nombre'    => ['required','string','max:120'],
+            'capacidad' => ['required','integer','min:0'],
+            'tipo'      => ['required','string','max:30'], // teoria/lab/etc
+            'ubicacion' => ['nullable','string','max:120'],
+            'habilitado'=> ['sometimes','boolean'],
         ]);
 
-        $aula = Aula::create($data);
-        return response()->json($aula, 201);
+        $aula = Aula::create($data + ['habilitado'=>$data['habilitado'] ?? true]);
+        $this->logAction('aula_creada','aula',$aula->id_aula,$data);
+        return response()->json($aula,201);
     }
 
-    public function show(Aula $aula)
+    public function update(Request $r, Aula $aula)
     {
-        return response()->json($aula);
-    }
-
-    public function update(Request $request, Aula $aula)
-    {
-        $data = $request->validate([
-            'nombre_aula' => [
-                'sometimes','string','max:50',
-                Rule::unique('aula','nombre_aula')->ignore($aula->id_aula, 'id_aula')
-            ],
-            'capacidad'   => ['sometimes','nullable','integer','min:1'],
-            'tipo_aula'   => ['sometimes','nullable','string','max:30'],
-            'ubicacion'   => ['sometimes','nullable','string','max:100'],
-            'habilitado'  => ['sometimes','boolean'],
+        $data = $r->validate([
+            'codigo'    => ['sometimes','string','max:20', Rule::unique('aula','codigo')->ignore($aula->id_aula,'id_aula')],
+            'nombre'    => ['sometimes','string','max:120'],
+            'capacidad' => ['sometimes','integer','min:0'],
+            'tipo'      => ['sometimes','string','max:30'],
+            'ubicacion' => ['sometimes','nullable','string','max:120'],
         ]);
-
         $aula->update($data);
-        return response()->json($aula);
+        $this->logAction('aula_editada','aula',$aula->id_aula,$data);
+        return $aula;
     }
 
-    public function destroy(Aula $aula)
+    public function toggle(Aula $aula)
     {
-        // Si prefieres borrado físico:
-        $aula->delete();
-
-        // Si prefieres “deshabilitar”:
-        // $aula->update(['habilitado' => false]);
-
-        return response()->json(null, 204);
+        if ($aula->habilitado) {
+            $enUso = CargaHoraria::where('id_aula',$aula->id_aula)->exists();
+            if ($enUso) {
+                return response()->json(['ok'=>false,'error'=>'No se puede desactivar: hay carga horaria asignada a esta aula.'],422);
+            }
+        }
+        $aula->habilitado = !$aula->habilitado;
+        $aula->save();
+        $this->logAction($aula->habilitado?'aula_activada':'aula_desactivada','aula',$aula->id_aula,[]);
+        return $aula;
     }
 }

@@ -17,7 +17,7 @@ class PeriodoAcademicoController extends Controller
         return view('periodos.index', compact('periodos'));
     }
 
-    /** Crear: queda BORRADOR + ACTIVO (cumple CU4) */
+
     public function store(Request $r)
     {
         $data = $r->validate([
@@ -26,12 +26,12 @@ class PeriodoAcademicoController extends Controller
             'fecha_fin'    => ['required','date','after:fecha_inicio'],
         ]);
 
-        // solapamiento (vigentes = activo=true OR publicado)
+       
         if (PeriodoAcademico::haySolapamiento($data['fecha_inicio'], $data['fecha_fin'], null)) {
             return back()->withErrors(['fecha_inicio' => 'Rango solapado con otro período vigente.'])->withInput();
         }
 
-        // nombre único (case-insensitive)
+     
         if (PeriodoAcademico::nombreUsado($data['nombre'])) {
             return back()->withErrors(['nombre' => 'Ya existe un período con ese nombre.'])->withInput();
         }
@@ -41,8 +41,8 @@ class PeriodoAcademicoController extends Controller
                 'nombre'              => $data['nombre'],
                 'fecha_inicio'        => $data['fecha_inicio'],
                 'fecha_fin'           => $data['fecha_fin'],
-                'estado_publicacion'  => 'borrador', // NUNCA 'activo' aquí
-                'activo'              => true,       // activo a true al crear
+                'estado_publicacion'  => 'borrador', 
+                'activo'              => true,       
             ]);
 
             $this->bit('periodo_creado', 'periodo', $row->getKey(), [
@@ -53,7 +53,7 @@ class PeriodoAcademicoController extends Controller
         return back()->with('ok','Período creado (borrador) y ACTIVADO.');
     }
 
-    /** Editar: prohibido si está publicado o archivado */
+
     public function update(Request $r, PeriodoAcademico $periodo)
     {
         if (in_array($periodo->estado_publicacion, ['publicado','archivado'])) {
@@ -107,7 +107,6 @@ class PeriodoAcademicoController extends Controller
 
         $target = $data['estado'];
 
-        // Activar (sigue en borrador pero activo=true)
         if ($target === 'activo') {
             if ($periodo->estado_publicacion !== 'borrador') {
                 return back()->withErrors(['estado'=>'Sólo se puede activar si está en borrador.']);
@@ -175,7 +174,6 @@ class PeriodoAcademicoController extends Controller
         return back()->with('ok','Período ARCHIVADO.');
     }
 
-    /** Reabrir publicado/archivado → vuelve a BORRADOR + ACTIVO=true */
     public function reabrir(Request $r, PeriodoAcademico $periodo)
     {
         if (!in_array($periodo->estado_publicacion, ['publicado','archivado'])) {
@@ -202,7 +200,7 @@ class PeriodoAcademicoController extends Controller
         return back()->with('ok','Período reabierto a BORRADOR y ACTIVADO.');
     }
 
-    /* ---------- Bitácora (si tienes tabla) ----------- */
+    /* ---------- Bitácora ----------- */
     private function bit(string $accion, string $entidad, ?int $entidadId, array $detalle, Request $r): void
     {
         try {
@@ -224,7 +222,6 @@ class PeriodoAcademicoController extends Controller
 
     public function stats()
 {
-    // Postgres: contar con FILTER
     $row = \DB::selectOne("
         SELECT
             COUNT(*)                                                        AS total,
