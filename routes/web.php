@@ -10,9 +10,14 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CoordinadorController;
 
 Route::middleware(['web','auth'])->group(function () {
-    Route::get('/periodos/stats', [PeriodoAcademicoController::class, 'stats'])->name('periodos.stats');
+    // Alias “plano” extra, apunta al mismo método
+    Route::patch('/periodos/{periodo}/estado', [PeriodoAcademicoController::class,'cambiarEstado'])
+        ->name('periodos.estado');
 
+    Route::post('/periodos/{periodo}/reabrir', [PeriodoAcademicoController::class,'reabrir'])
+        ->name('periodos.reabrir');
 });
+
  
 Route::get('/coordinador', [CoordinadorController::class, 'index'])
     ->name('coordinador.dashboard')
@@ -53,20 +58,37 @@ Route::middleware(['web','auth'])
     Route::post('/carreras',       [CarreraController::class,'store'])->name('carreras.store');
     Route::put('/carreras/{carrera}',   [CarreraController::class,'update'])->name('carreras.update');
     Route::patch('/carreras/{carrera}/toggle', [CarreraController::class,'toggle'])->name('carreras.toggle');
-
-    // Docentes (sólo API para listados)
     Route::get('/docentes',  [DocenteController::class,'index'])->name('docentes.index');
 
-    // (Si ya tienes vistas para materias/aulas, mantenlas aquí)
+
     Route::get('/materias',  [MateriaController::class,'index'])->name('materias.index');
     Route::get('/aulas',     [AulaController::class,'index'])->name('aulas.index');
+    Route::get('/periodos',                   [PeriodoAcademicoController::class,'index'])->name('periodos.index');
+    Route::post('/periodos',                  [PeriodoAcademicoController::class,'store'])->name('periodos.store');
+    Route::put('/periodos/{periodo}',         [PeriodoAcademicoController::class,'update'])->name('periodos.update');
+    Route::patch('/periodos/{periodo}/estado',[PeriodoAcademicoController::class,'cambiarEstado'])->name('periodos.estado');
+    Route::post('/periodos/{periodo}/reabrir',[PeriodoAcademicoController::class,'reabrir'])->name('periodos.reabrir');
+});
 
-    // Periodos (dentro de admin)
-    Route::get('/periodos',        [PeriodoAcademicoController::class,'index'])->name('periodos.index');
-    Route::post('/periodos',       [PeriodoAcademicoController::class,'store'])->name('periodos.store');
-    Route::put('/periodos/{periodo}', [PeriodoAcademicoController::class,'update'])->name('periodos.update');
-    Route::patch('/periodos/{periodo}/estado', [PeriodoAcademicoController::class,'cambiarEstado'])->name('periodos.estado');
-    Route::post('/periodos/{periodo}/reabrir', [PeriodoAcademicoController::class,'reabrir'])->name('periodos.reabrir');
+Route::middleware(['web','auth'])->prefix('docente')->name('docente.')->group(function () {
+    Route::get('/', [DocenteController::class, 'dashboard'])->name('dashboard');
+
+   
+    Route::get('/disponibilidad', [DocenteController::class, 'disponibilidad'])->name('disp.view');
+    Route::get('/mi-disponibilidad', [DisponibilidadDocenteController::class, 'index'])->name('disp.index'); // ?id_periodo=#
+    Route::post('/mi-disponibilidad', [DisponibilidadDocenteController::class, 'store'])->name('disp.store');
+    Route::match(['put','patch'],'/mi-disponibilidad/{disponibilidad}', [DisponibilidadDocenteController::class, 'update'])->name('disp.update');
+    Route::delete('/mi-disponibilidad/{disponibilidad}', [DisponibilidadDocenteController::class, 'destroy'])->name('disp.destroy');
+    Route::post('/docente/mi-disponibilidad/batch', [\App\Http\Controllers\DisponibilidadDocenteController::class,'storeBatch'])
+    ->name('docente.disp.storeBatch')
+    ->middleware('auth');
+
+});
+Route::middleware(['web','auth'])->group(function () {
+    Route::post(
+        '/docente/mi-disponibilidad/batch',
+        [DisponibilidadDocenteController::class, 'storeBatch']
+    )->name('docente.disp.storeBatch');
 });
 
 Route::apiResource('sesiones-tokens', SesionDocenteTokenController::class);
@@ -97,6 +119,9 @@ Route::apiResource('estudiantes', EstudianteController::class);
 Route::apiResource('roles', RolController::class);
 Route::apiResource('usuarios', UsuarioController::class);
 Route::apiResource('docentes', DocenteController::class);
+
+
+
 Route::apiResource('estudiantes', EstudianteController::class);
 Route::apiResource('carreras', CarreraController::class);
 

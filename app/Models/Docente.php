@@ -3,7 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use Illuminate\Support\Facades\Schema;
+use Request;
 class Docente extends Model
 {
     protected $table = 'docente';
@@ -37,4 +38,27 @@ class Docente extends Model
 
         return 'Docente #'.$this->attributes[$this->primaryKey];
     }
+    public function disponibilidad(Request $r)
+{
+    // columna de estado disponible
+    $col = Schema::hasColumn('periodo_academico','estado')
+        ? 'estado'
+        : (Schema::hasColumn('periodo_academico','estado_publicacion') ? 'estado_publicacion' : null);
+
+    $validos = ['EnAsignacion','Reabierto','Activo','Publicado','publicado','borrador','Borrador'];
+
+    $periodos = \App\Models\PeriodoAcademico::query()
+        ->when($col, fn($q) => $q->whereIn($col, $validos))
+        ->orderByDesc('fecha_inicio')
+        ->get(['id_periodo','nombre','fecha_inicio','fecha_fin']);
+
+    $ultimo = \App\Models\PeriodoAcademico::query()
+        ->when($col, fn($q) => $q->whereIn($col, $validos))
+        ->orderByDesc('id_periodo')
+        ->first();
+
+    $idPeriodo = (int) ($r->query('id_periodo') ?? ($ultimo?->id_periodo ?? 0));
+
+    return view('docente.disponibilidad', compact('periodos','idPeriodo'));
+}
 }
