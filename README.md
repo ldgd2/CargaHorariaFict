@@ -63,3 +63,6 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
 >>>>>>> c89e457 (Proyecto Carga Horaria Si1)
+
+carga Horaria hecha pero hay un bug donde al seleccionar una aula se bloquea por la fecha del periodo, osea que un grupo (por ejemplo INF119 va a ocupar el aula A-11 por todo un semestre y ningun otro docente podra utilizar) se tiene que
+

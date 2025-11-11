@@ -205,12 +205,11 @@ function cargaUI(){
     beforeSubmit(formEl){
       if(!this.canSubmit()){
         alert('Selecciona al menos una franja libre.');
-        return; // NO enviar
+        return;
       }
       const host = formEl.querySelector('#hidden-items');
       host.innerHTML = '';
 
-      // Inyectar items[n][dia_semana|hora_inicio|hora_fin]
       this.disp
         .filter(d => this.selectedIds.includes(d.id_disponibilidad))
         .forEach((d,i)=>{
