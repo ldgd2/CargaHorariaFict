@@ -90,10 +90,13 @@ Route::post('/carga/batch',[CargaHorariaController::class,'storeBatch'])->name('
     // APIs de apoyo para selects/UX 
     Route::prefix('api')->group(function () {
         Route::get('/periodos', [CargaHorariaController::class,'apiPeriodos'])->name('api.periodos');
-        Route::get('/grupos',   [CargaHorariaController::class,'apiGrupos']);             // ?id_periodo=
-        Route::get('/docentes', [CargaHorariaController::class,'apiDocentes']);
-        Route::get('/aulas',    [CargaHorariaController::class,'apiAulas']);
-        Route::get('/docentes/{id}/disponibilidad', [CargaHorariaController::class,'apiDisponibilidadDocente']);
+        Route::get('/api/periodos', [CargaHorariaController::class,'apiPeriodos'])->name('api.periodos');
+        Route::get('/api/grupos',   [CargaHorariaController::class,'apiGrupos'])->name('api.grupos');
+        Route::get('/api/docentes', [CargaHorariaController::class,'apiDocentes'])->name('api.docentes');
+        Route::get('/api/aulas',    [CargaHorariaController::class,'apiAulas'])->name('api.aulas');
+        Route::get('/api/docentes/{docenteId}/disponibilidad',
+  [\App\Http\Controllers\CargaHorariaController::class, 'apiDisponibilidadDocente']
+            )->name('api.docente.disponibilidad');
     });
 
     // ---------------------------
@@ -125,8 +128,10 @@ Route::prefix('api')->group(function () {
     Route::get('/grupos',   [CargaHorariaController::class,'apiGrupos'])->name('api.grupos');  // <- nombra también
     Route::get('/docentes', [CargaHorariaController::class,'apiDocentes'])->name('api.docentes'); // <- necesario
     Route::get('/aulas',    [CargaHorariaController::class,'apiAulas'])->name('api.aulas');       // <- necesario
-    Route::get('/docentes/{id}/disponibilidad', [CargaHorariaController::class,'apiDisponibilidadDocente'])
-        ->name('api.docente.disponibilidad');
+    Route::get('/api/docentes/{docenteId}/disponibilidad',
+    [CargaHorariaController::class,'apiDisponibilidadDocente']
+    )->name('api.docente.disponibilidad');
+
 });
 
 Route::prefix('admin')->as('admin.')->middleware('auth')->group(function () {
