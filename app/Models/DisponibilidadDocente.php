@@ -50,4 +50,9 @@ class DisponibilidadDocente extends Model
         return $q->where('hora_inicio', '<', $hFin)
                  ->where('hora_fin',    '>', $hIni);
     }
+
+    public function scopeCubre($q, string $ini, string $fin) {
+    return $q->where('hora_inicio','<=',$ini)->where('hora_fin','>=',$fin);
+}
+
 }
