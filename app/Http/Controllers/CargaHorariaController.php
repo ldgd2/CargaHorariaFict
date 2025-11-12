@@ -1,456 +1,191 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
 use App\Models\CargaHoraria;
-use App\Models\PeriodoAcademico;
 use App\Models\Grupo;
-use App\Models\Docente;
-use App\Models\DisponibilidadDocente;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class CargaHorariaController extends Controller
 {
-    /* ---------- VISTAS / APIS BÁSICAS ---------- */
-
-    public function create(Request $r)
+    // GET /carga-horaria
+    public function index(Request $request)
     {
-        $periodos = PeriodoAcademico::query()
-            ->select('id_periodo','nombre','fecha_inicio','fecha_fin','estado_publicacion')
-            ->orderByDesc('id_periodo')->limit(25)->get();
+        $q = CargaHoraria::query()
+            ->with(['grupo', 'docente', 'aula']);
 
-        return view('carga.create', compact('periodos'));
+        if ($request->filled('id_periodo')) {
+            $q->delPeriodo((int) $request->id_periodo);
+        }
+        if ($request->filled('id_docente')) {
+            $q->delDocente((int) $request->id_docente);
+        }
+        if ($request->filled('id_aula')) {
+            $q->delAula((int) $request->id_aula);
+        }
+        if ($request->filled('dia_semana')) {
+            $q->delDia((int) $request->dia_semana);
+        }
+
+        return response()->json($q->orderBy('dia_semana')->orderBy('hora_inicio')->get());
     }
 
-    public function apiPeriodos()
+    // POST /carga-horaria
+    public function store(Request $request)
     {
-        return PeriodoAcademico::query()
-            ->select('id_periodo','nombre','fecha_inicio','fecha_fin','estado_publicacion')
-            ->orderByDesc('id_periodo')->get();
-    }
+        $data = $this->validateData($request);
 
-    public function apiGrupos(Request $r)
-    {
-        $pid = (int) $r->query('id_periodo');
-
-        return Grupo::query()
-            ->when($pid, fn($q) => $q->where('grupo.id_periodo', $pid))
-            ->leftJoin('materia', 'materia.id_materia', '=', 'grupo.id_materia')
-            ->leftJoin('carrera', 'carrera.id_carrera', '=', 'grupo.id_carrera')
-            ->orderBy('grupo.nombre_grupo')
-            ->get([
-                'grupo.id_grupo',
-                'grupo.nombre_grupo',
-                'grupo.id_periodo',
-                'grupo.id_materia',
-                'grupo.id_carrera',
-                DB::raw("COALESCE(materia.cod_materia,'')  AS cod_materia"),
-                DB::raw("COALESCE(carrera.nombre,'')       AS nombre_carrera"),
-            ]);
-    }
-
-    public function apiDocentes()
-    {
-        return Docente::query()
-            ->leftJoin('usuario', 'usuario.id_usuario', '=', 'docente.id_docente')
-            ->orderBy(DB::raw("COALESCE(usuario.nombre,'')"))
-            ->get([
-                'docente.id_docente',
-                'docente.nro_documento',
-                'docente.habilitado',
-                'docente.tope_horas_semana',
-                DB::raw("COALESCE(usuario.nombre,'')   AS nombre"),
-                DB::raw("COALESCE(usuario.apellido,'') AS apellido"),
-                DB::raw("(COALESCE(usuario.nombre,'') || ' ' || COALESCE(usuario.apellido,'')) AS nombre_completo"),
-            ]);
-    }
-
-    public function apiAulas(Request $r)
-    {
-        $pid = (int) $r->query('id_periodo');
-        $per = $pid ? PeriodoAcademico::select('fecha_inicio','fecha_fin')->find($pid) : null;
-
-        $ini = $per ? Carbon::parse($per->fecha_inicio)->startOfDay()->toDateString() : null;
-        $fin = $per ? Carbon::parse($per->fecha_fin)->endOfDay()->toDateString() : null;
-
-        $cols = [
-            'aula.id_aula',
-            DB::raw('aula.nombre_aula AS codigo'),
-            'aula.capacidad',
-            DB::raw('aula.habilitado AS habilitada'),
-        ];
-
-        if ($per && Schema::hasTable('bloqueo_aula')) {
-            $cols[] = DB::raw("
-                EXISTS (
-                    SELECT 1 FROM bloqueo_aula b
-                     WHERE b.id_aula = aula.id_aula
-                       AND b.fecha_fin    >= DATE '{$ini}'
-                       AND b.fecha_inicio <= DATE '{$fin}'
-                ) AS ocupada
-            ");
-        } else {
-            $cols[] = DB::raw('false AS ocupada');
-        }
-
-        $aulas = DB::table('aula')->orderBy('nombre_aula')->get($cols);
-
-        foreach ($aulas as $a) {
-            if (!empty($a->ocupada)) {
-                $a->codigo = $a->codigo.' (ocupada)';
-            }
-        }
-        return $aulas;
-    }
-
-    public function apiDisponibilidadDocente(Request $r, int $docenteId)
-    {
-        $pid    = (int) $r->query('id_periodo');
-        $aulaId = (int) $r->query('id_aula'); // opcional
-        abort_if(!$pid, 422, 'id_periodo requerido');
-
-        $estadoCH = Schema::hasColumn('carga_horaria','estado') ? 'estado' : null;
-
-        $cols = [
-            'd.id_disponibilidad',
-            'd.dia_semana',
-            DB::raw("to_char(d.hora_inicio,'HH24:MI') as hora_inicio"),
-            DB::raw("to_char(d.hora_fin,'HH24:MI')    as hora_fin"),
-            'd.prioridad',
-            'd.observaciones',
-            DB::raw("EXISTS(
-                SELECT 1 FROM carga_horaria ch
-                WHERE ch.id_docente = d.id_docente
-                  AND ch.dia_semana = d.dia_semana
-                  AND ch.hora_inicio < d.hora_fin
-                  AND ch.hora_fin    > d.hora_inicio
-                  ".($estadoCH ? "AND ch.$estadoCH IN ('Vigente','Activo')" : "")."
-            ) as ocupado"),
-        ];
-
-        if ($aulaId) {
-            $cols[] = DB::raw("EXISTS(
-                SELECT 1 FROM carga_horaria ch2
-                WHERE ch2.id_aula = {$aulaId}
-                  AND ch2.dia_semana = d.dia_semana
-                  AND ch2.hora_inicio < d.hora_fin
-                  AND ch2.hora_fin    > d.hora_inicio
-                  AND ch2.id_docente <> d.id_docente
-                  ".($estadoCH ? "AND ch2.$estadoCH IN ('Vigente','Activo')" : "")."
-            ) as ocupado_aula");
-
-            $cols[] = DB::raw("(
-                SELECT (COALESCE(u.nombre,'')||' '||COALESCE(u.apellido,'')) || ' — ' || COALESCE(g.nombre_grupo,'')
-                FROM carga_horaria chx
-                LEFT JOIN docente dd ON dd.id_docente = chx.id_docente
-                LEFT JOIN usuario u  ON u.id_usuario = dd.id_docente
-                LEFT JOIN grupo   g  ON g.id_grupo = chx.id_grupo
-                WHERE chx.id_aula = {$aulaId}
-                  AND chx.dia_semana = d.dia_semana
-                  AND chx.hora_inicio < d.hora_fin
-                  AND chx.hora_fin    > d.hora_inicio
-                  AND chx.id_docente <> d.id_docente
-                  ".($estadoCH ? "AND chx.$estadoCH IN ('Vigente','Activo')" : "")."
-                ORDER BY chx.hora_inicio
-                LIMIT 1
-            ) as conflicto_con");
-        } else {
-            $cols[] = DB::raw('false as ocupado_aula');
-            $cols[] = DB::raw('NULL::text as conflicto_con');
-        }
-
-        return DisponibilidadDocente::query()
-            ->from('disponibilidad_docente as d')
-            ->where('d.id_docente', $docenteId)
-            ->where('d.id_periodo', $pid)
-            ->orderBy('d.dia_semana')->orderBy('d.hora_inicio')
-            ->get($cols);
-    }
-
-    public function apiAulaOcupaciones(Request $r)
-    {
-        $pid    = (int) $r->query('id_periodo');
-        $aulaId = (int) $r->query('id_aula');
-        abort_if(!$pid || !$aulaId, 422, 'id_periodo e id_aula requeridos');
-
-        $estadoCH = Schema::hasColumn('carga_horaria','estado') ? 'estado' : null;
-
-        return DB::table('carga_horaria as ch')
-            ->join('grupo as g','g.id_grupo','=','ch.id_grupo')
-            ->leftJoin('docente as d','d.id_docente','=','ch.id_docente')
-            ->leftJoin('usuario as u','u.id_usuario','=','d.id_docente')
-            ->where('ch.id_aula',$aulaId)
-            ->where('g.id_periodo',$pid)
-            ->when($estadoCH, fn($q)=>$q->whereIn("ch.$estadoCH",['Vigente','Activo']))
-            ->orderBy('ch.dia_semana')->orderBy('ch.hora_inicio')
-            ->get([
-                'ch.dia_semana',
-                DB::raw("to_char(ch.hora_inicio,'HH24:MI') as hora_inicio"),
-                DB::raw("to_char(ch.hora_fin,'HH24:MI')    as hora_fin"),
-                DB::raw("(COALESCE(u.nombre,'')||' '||COALESCE(u.apellido,'')) as docente"),
-                'g.nombre_grupo as grupo',
-            ]);
-    }
-
-    /* ---------- STORE (una carga) ---------- */
-
-    public function store(Request $r)
-    {
-        $data = $r->validate([
-            'id_periodo'   => ['required','integer','exists:periodo_academico,id_periodo'],
-            'id_grupo'     => ['required','integer','exists:grupo,id_grupo'],
-            'id_docente'   => ['required','integer','exists:docente,id_docente'],
-            'id_aula'      => ['required','integer','exists:aula,id_aula'],
-            'dia_semana'   => ['required','integer','between:1,7'],
-            'hora_inicio'  => ['required','date_format:H:i'],
-            'hora_fin'     => ['required','date_format:H:i','after:hora_inicio'],
-            'observaciones'=> ['nullable','string','max:255'],
-        ]);
-
-        $periodo = (int)$data['id_periodo'];
-        $aula    = (int)$data['id_aula'];
-
-        $periodoRow = PeriodoAcademico::select('fecha_inicio','fecha_fin')->find($periodo);
-        abort_if(!$periodoRow, 422, 'Período inválido.');
-        $perIni = Carbon::parse($periodoRow->fecha_inicio)->startOfDay();
-        $perFin = Carbon::parse($periodoRow->fecha_fin)->endOfDay();
-
-        $estadoCol = Schema::hasColumn('periodo_academico','estado') ? 'estado'
-                  : (Schema::hasColumn('periodo_academico','estado_publicacion') ? 'estado_publicacion' : null);
-        if ($estadoCol) {
-            $ok = PeriodoAcademico::where('id_periodo',$periodo)
-                ->whereIn($estadoCol, ['EnAsignacion','Reabierto','Activo','Publicado','publicado'])
-                ->exists();
-            abort_if(!$ok, 422, 'El período no permite asignación.');
-        }
-
-        $tieneDisp = DisponibilidadDocente::query()
-            ->where('id_docente',$data['id_docente'])
-            ->where('id_periodo',$periodo)
-            ->where('dia_semana',$data['dia_semana'])
-            ->where('hora_inicio','<=',$data['hora_inicio'])
-            ->where('hora_fin','>=',$data['hora_fin'])
-            ->exists();
-        if (!$tieneDisp) {
-            return back()->withErrors(['E3'=>'Docente sin disponibilidad en esa franja.'])->withInput();
-        }
-
-        $solapeDoc = CargaHoraria::query()
-            ->where('id_docente',$data['id_docente'])
-            ->where('dia_semana',$data['dia_semana'])
-            ->where(function($q) use ($data){
-                $q->where('hora_inicio','<',$data['hora_fin'])
-                  ->where('hora_fin','>',$data['hora_inicio']);
-            })->exists();
-        if ($solapeDoc) {
-            return back()->withErrors(['E1'=>'Solape de docente con otra carga.'])->withInput();
-        }
-
-        $solapeAula = CargaHoraria::query()
-            ->where('id_aula',$aula)
-            ->where('dia_semana',$data['dia_semana'])
-            ->where(function($q) use ($data){
-                $q->where('hora_inicio','<',$data['hora_fin'])
-                  ->where('hora_fin','>',$data['hora_inicio']);
-            })->exists();
-        if ($solapeAula) {
-            return back()->withErrors(['E2'=>'Aula ocupada en esa franja.'])->withInput();
-        }
-
-        if (Schema::hasTable('bloqueo_aula')) {
-            $hayBloqueo = DB::table('bloqueo_aula')
-                ->where('id_aula', $aula)
-                ->whereDate('fecha_fin', '>=', $perIni->toDateString())
-                ->whereDate('fecha_inicio', '<=', $perFin->toDateString())
-                ->exists();
-            if ($hayBloqueo) {
-                return back()->withErrors(['E2' => 'Aula bloqueada en el período seleccionado.'])->withInput();
-            }
-        }
-
-        $tope = (int) (Docente::where('id_docente',$data['id_docente'])->value('tope_horas_semana') ?? 0);
-        if ($tope > 0) {
-            $durNew = self::mins($data['hora_inicio'],$data['hora_fin'])/60.0;
-            $durExist = (float) DB::table('carga_horaria')
-                ->where('id_docente',$data['id_docente'])
-                ->sum(DB::raw("EXTRACT(EPOCH FROM (hora_fin - hora_inicio))/3600.0"));
-            if ($durExist + $durNew > $tope + 1e-6) {
-                return back()->withErrors(['E4'=>"Excede tope semanal del docente ({$tope} h)."])->withInput();
-            }
-        }
+        // Validar disponibilidad y solapes antes de insertar (mensaje amigable)
+        $this->validateDisponibilidad($data);
+        $this->validateSolapesAplicacion($data);
 
         try {
-            DB::transaction(function () use ($data, $aula, $perIni, $perFin) {
-                $c = new CargaHoraria();
-                $c->fill([
-                    'id_grupo'        => $data['id_grupo'],
-                    'id_docente'      => $data['id_docente'],
-                    'id_aula'         => $aula,
-                    'dia_semana'      => $data['dia_semana'],
-                    'hora_inicio'     => $data['hora_inicio'],
-                    'hora_fin'        => $data['hora_fin'],
-                    'fecha_asignacion'=> now(),
-                    'estado'          => 'Vigente',
-                ]);
-                $c->save();
-
-                $this->ensureBloqueoAula($aula, $perIni, $perFin);
-            });
-
-            return redirect()->route('coordinador.dashboard')->with('ok','Carga asignada correctamente.');
-        } catch (\Throwable $e) {
-            report($e);
-            return back()->withErrors(['E5'=>'Error de BD'])->withInput();
+            $carga = CargaHoraria::create($data);
+            return response()->json($carga->load(['grupo', 'docente', 'aula']), 201);
+        } catch (QueryException $e) {
+            // Capturamos violaciones de EXCLUDE (GIST)
+            $msg = $this->traducirErrorExclusion($e);
+            return response()->json(['message' => $msg], 422);
         }
     }
 
-    /* ---------- STORE BATCH ---------- */
-
-    public function storeBatch(Request $r)
+    // GET /carga-horaria/{id}
+    public function show(int $id)
     {
-        $base = $r->validate([
-            'id_periodo' => ['required','integer','exists:periodo_academico,id_periodo'],
-            'id_grupo'   => ['required','integer','exists:grupo,id_grupo'],
-            'id_docente' => ['required','integer','exists:docente,id_docente'],
-            'id_aula'    => ['required','integer','exists:aula,id_aula'],
-            'observaciones' => ['nullable','string','max:255'],
-            'items'      => ['required','array','min:1'],
-            'items.*.dia_semana'  => ['required','integer','between:1,7'],
-            'items.*.hora_inicio' => ['required','date_format:H:i'],
-            'items.*.hora_fin'    => ['required','date_format:H:i'],
-        ]);
+        $carga = CargaHoraria::with(['grupo', 'docente', 'aula'])->findOrFail($id);
+        return response()->json($carga);
+    }
 
-        $periodo = (int)$base['id_periodo'];
-        $grupo   = (int)$base['id_grupo'];
-        $docente = (int)$base['id_docente'];
-        $aula    = (int)$base['id_aula'];
+    // PUT/PATCH /carga-horaria/{id}
+    public function update(Request $request, int $id)
+    {
+        $carga = CargaHoraria::findOrFail($id);
 
-        $periodoRow = PeriodoAcademico::select('fecha_inicio','fecha_fin')->find($periodo);
-        abort_if(!$periodoRow, 422, 'Período inválido.');
-        $perIni = Carbon::parse($periodoRow->fecha_inicio)->startOfDay();
-        $perFin = Carbon::parse($periodoRow->fecha_fin)->endOfDay();
+        $data = $this->validateData($request, updating: true);
 
-        if (Schema::hasTable('bloqueo_aula')) {
-            $hayBloqueo = DB::table('bloqueo_aula')
-                ->where('id_aula', $aula)
-                ->whereDate('fecha_fin', '>=', $perIni->toDateString())
-                ->whereDate('fecha_inicio', '<=', $perFin->toDateString())
-                ->exists();
-            if ($hayBloqueo) {
-                return back()->withErrors(['E2'=>'Aula bloqueada en el período seleccionado.'])->withInput();
-            }
-        }
+        // Validar disponibilidad y solapes (ignorando el propio registro)
+        $this->validateDisponibilidad($data);
+        $this->validateSolapesAplicacion($data, $id);
 
-        $errores = [];
-        $creados = 0;
-
-        DB::beginTransaction();
         try {
-            foreach ($base['items'] as $i => $it) {
-                $dia = (int)$it['dia_semana'];
-                $ini = $it['hora_inicio'];
-                $fin = $it['hora_fin'];
-
-                if ($ini >= $fin) { $errores[]="Fila #$i: fin debe ser mayor que inicio"; continue; }
-
-                $hayDisp = DisponibilidadDocente::query()
-                    ->where('id_docente',$docente)->where('id_periodo',$periodo)
-                    ->where('dia_semana',$dia)
-                    ->where('hora_inicio','<=',$ini)->where('hora_fin','>=',$fin)
-                    ->exists();
-                if(!$hayDisp){ $errores[]="Fila #$i: docente sin disponibilidad (E3)"; continue; }
-
-                $solapeDoc = DB::table('carga_horaria')
-                    ->where('id_docente',$docente)->where('dia_semana',$dia)
-                    ->where('hora_inicio','<',$fin)->where('hora_fin','>',$ini)
-                    ->exists();
-                if($solapeDoc){ $errores[]="Fila #$i: solape con otra carga del docente (E1)"; continue; }
-
-                $solapeAula = DB::table('carga_horaria')
-                    ->where('id_aula',$aula)->where('dia_semana',$dia)
-                    ->where('hora_inicio','<',$fin)->where('hora_fin','>',$ini)
-                    ->exists();
-                if($solapeAula){ $errores[]="Fila #$i: aula ocupada / solape (E2)"; continue; }
-
-                DB::table('carga_horaria')->insert([
-                    'id_grupo'        => $grupo,
-                    'id_docente'      => $docente,
-                    'id_aula'         => $aula,
-                    'dia_semana'      => $dia,
-                    'hora_inicio'     => $ini,
-                    'hora_fin'        => $fin,
-                    'fecha_asignacion'=> now(),
-                    'estado'          => 'Vigente',
-                ]);
-                $creados++;
-            }
-
-            if ($creados === 0) {
-                DB::rollBack();
-                return back()->withErrors($errores ?: ['No se pudo crear ninguna carga.'])->withInput();
-            }
-
-            $this->ensureBloqueoAula($aula, $perIni, $perFin);
-
-            DB::commit();
-            return redirect()->route('coordinador.dashboard')
-                ->with('ok', "Cargas creadas: $creados" . (count($errores) ? ' | Con advertencias: '.implode(' · ', $errores) : ''));
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            \Log::error('storeBatch error', ['msg'=>$e->getMessage()]);
-            return back()->withErrors(['E5' => $e->getMessage()])->withInput();
+            $carga->update($data);
+            return response()->json($carga->refresh()->load(['grupo', 'docente', 'aula']));
+        } catch (QueryException $e) {
+            $msg = $this->traducirErrorExclusion($e);
+            return response()->json(['message' => $msg], 422);
         }
     }
 
-    /* ---------- HELPERS ---------- */
-
-    /** Minutos entre dos horas HH:MM */
-    private static function mins(string $h1, string $h2): int
+    // DELETE /carga-horaria/{id}
+    public function destroy(int $id)
     {
-        [$h,$m]   = array_map('intval', explode(':',$h1));
-        [$hB,$mB] = array_map('intval', explode(':',$h2));
-        $a = $h*60 + $m;
-        $b = $hB*60 + $mB;
-        return max(0, $b - $a);
+        $carga = CargaHoraria::findOrFail($id);
+        $carga->delete();
+        return response()->json(['deleted' => true]);
     }
 
-    /** HH:MM -> minutos desde 00:00 */
-    private static function timeToMinutes(string $hhmm): int
+    // -------- Helpers --------
+
+    private function validateData(Request $request, bool $updating = false): array
     {
-        [$h,$m] = array_map('intval', explode(':',$hhmm));
-        return $h*60 + $m;
+        return $request->validate([
+            'id_grupo'    => ['required', 'integer', 'exists:grupo,id_grupo'],
+            'id_docente'  => ['required', 'integer', 'exists:docente,id_docente'],
+            'id_aula'     => ['required', 'integer', 'exists:aula,id_aula'],
+            'dia_semana'  => ['required', 'integer', 'between:1,7'],
+            'hora_inicio' => ['required', 'date_format:H:i'],
+            'hora_fin'    => ['required', 'date_format:H:i', 'after:hora_inicio'],
+            'estado'      => ['nullable', Rule::in(['Vigente','Modificado','Anulado'])],
+        ]);
     }
 
-    private static function rangoContieneDiaSemana(Carbon $start, Carbon $end, int $isoDow): bool
+    /**
+     * Verifica que el docente tenga al menos un bloque de disponibilidad
+     * que cubra completamente el rango solicitado en el día del grupo/periodo.
+     */
+    private function validateDisponibilidad(array $data): void
     {
-        if ($end->lt($start)) return false;
-        $first  = $start->copy();
-        $offset = ($isoDow - $first->isoWeekday() + 7) % 7;
-        if ($offset) $first->addDays($offset);
-        return $first->lte($end);
-    }
+        // Recuperamos el periodo a partir del grupo
+        $grupo = Grupo::findOrFail((int) $data['id_grupo']);
 
-    private function ensureBloqueoAula(int $idAula, Carbon $perIni, Carbon $perFin): void
-    {
-        if (!Schema::hasTable('bloqueo_aula')) return;
-
-        $existe = DB::table('bloqueo_aula')
-            ->where('id_aula', $idAula)
-            ->whereDate('fecha_fin', '>=', $perIni->toDateString())
-            ->whereDate('fecha_inicio', '<=', $perFin->toDateString())
+        $existe = DB::table('disponibilidad_docente')
+            ->where('id_docente', $data['id_docente'])
+            ->where('id_periodo', $grupo->id_periodo)
+            ->where('dia_semana', $data['dia_semana'])
+            ->where('hora_inicio', '<=', $data['hora_inicio'])
+            ->where('hora_fin', '>=', $data['hora_fin'])
             ->exists();
 
-        if ($existe) return;
-
-        DB::table('bloqueo_aula')->insert([
-            'id_aula'       => $idAula,
-            'fecha_inicio'  => $perIni->toDateString(),
-            'fecha_fin'     => $perFin->toDateString(),
-            'motivo'        => 'Reserva exclusiva del aula por período (cargas asignadas).',
-            'registrado_por'=> Auth::id(),
-        ]);
+        if (!$existe) {
+            abort(response()->json([
+                'message' => 'El docente no tiene disponibilidad registrada para ese día y franja en el periodo del grupo.'
+            ], 422));
+        }
     }
+
+    /**
+     * Validación a nivel de aplicación para dar mensajes antes de que
+     * la BD bloquee por las EXCLUSION CONSTRAINT (solapes de aula/docente).
+     */
+    private function validateSolapesAplicacion(array $data, ?int $ignorarId = null): void
+    {
+        // Solapes DOCENTE misma franja/día
+        $docSolapa = CargaHoraria::query()
+            ->when($ignorarId, fn($q) => $q->where('id_carga', '!=', $ignorarId))
+            ->where('id_docente', $data['id_docente'])
+            ->where('dia_semana', $data['dia_semana'])
+            ->where(function ($q) use ($data) {
+                $q->where(function ($q2) use ($data) {
+                    $q2->where('hora_inicio', '<', $data['hora_fin'])
+                       ->where('hora_fin',   '>', $data['hora_inicio']);
+                });
+            })
+            ->exists();
+
+        if ($docSolapa) {
+            abort(response()->json([
+                'message' => 'Solape detectado: el docente ya tiene una asignación en ese día/franja.'
+            ], 422));
+        }
+
+        // Solapes AULA misma franja/día
+        $aulaSolapa = CargaHoraria::query()
+            ->when($ignorarId, fn($q) => $q->where('id_carga', '!=', $ignorarId))
+            ->where('id_aula', $data['id_aula'])
+            ->where('dia_semana', $data['dia_semana'])
+            ->where(function ($q) use ($data) {
+                $q->where(function ($q2) use ($data) {
+                    $q2->where('hora_inicio', '<', $data['hora_fin'])
+                       ->where('hora_fin',   '>', $data['hora_inicio']);
+                });
+            })
+            ->exists();
+
+        if ($aulaSolapa) {
+            abort(response()->json([
+                'message' => 'Solape detectado: el aula ya está asignada en ese día/franja.'
+            ], 422));
+        }
+    }
+
+    private function traducirErrorExclusion(QueryException $e): string
+    {
+        $msg = $e->getMessage();
+
+
+        if (str_contains($msg, 'ex_aula')) {
+            return 'Conflicto de aula: esa franja horaria en ese día ya está ocupada.';
+        }
+        if (str_contains($msg, 'ex_docente')) {
+            return 'Conflicto de docente: la franja se solapa con otra asignación del mismo docente.';
+        }
+
+        return 'No se pudo guardar la carga horaria (verifique conflictos y datos).';
+      
+    }
+
+    
 }

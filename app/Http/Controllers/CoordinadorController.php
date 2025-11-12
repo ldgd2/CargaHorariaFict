@@ -12,9 +12,14 @@ class CoordinadorController extends Controller
 {
     public function __construct()
     {
+        // usa el login general; si no hay sesión redirige a /login
         $this->middleware('auth');
+
+        // chequeo de rol “Coordinador” sin middleware extra
         $this->middleware(function ($request, $next) {
             $user = $request->user();
+
+            // Si tu relación ya existe: $user->roles()
             $esCoord = $user->roles()
                 ->where('nombre_rol', 'Coordinador')
                 ->orWhere('nombre_rol', 'coordinador')
@@ -30,12 +35,14 @@ class CoordinadorController extends Controller
 {
     $user = Auth::user();
 
-    //defaults
+    // Métricas con defaults
     $total       = PeriodoAcademico::count();
     $borradores  = 0;
     $activos     = 0;
     $publicados  = 0;
     $archivados  = 0;
+
+    // Solo si existe la columna `estado`
     if (Schema::hasColumn('periodo_academico', 'estado')) {
         $borradores = PeriodoAcademico::where('estado','Borrador')->count();
         $activos    = PeriodoAcademico::where('estado','Activo')->count();
@@ -43,6 +50,7 @@ class CoordinadorController extends Controller
         $archivados = PeriodoAcademico::where('estado','Archivado')->count();
     }
 
+    // Elegimos una columna existente para “último”
     $ordenCol = collect(['fecha_inicio','created_at','id_periodo','id'])
         ->first(fn($c) => Schema::hasColumn('periodo_academico', $c)) ?? 'nombre';
 
