@@ -4,6 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
+use App\Models\Grupo;
+use App\Models\Docente;
+use App\Models\Aula;
+use App\Models\AsistenciaSesion;
+
 class CargaHoraria extends Model
 {
     protected $table = 'carga_horaria';
@@ -11,9 +16,13 @@ class CargaHoraria extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'id_grupo','id_docente','id_aula',
-        'dia_semana','hora_inicio','hora_fin',
-        'estado','observaciones'
+        'id_grupo',
+        'id_docente',
+        'id_aula',
+        'dia_semana',
+        'hora_inicio',
+        'hora_fin',
+        'estado',
     ];
 
     // --- Relaciones ---
@@ -55,15 +64,11 @@ class CargaHoraria extends Model
         return $query->where('id_aula', $idAula);
     }
 
-    public function scopeDePeriodo($q, int $pid) { 
-        return $q->where('id_periodo',$pid); 
+    public function scopeDelDia($query, int $dia)
+    {
+        return $query->where('dia_semana', $dia);
     }
-    public function scopeDelDia($q, int $d) { 
-        return $q->where('dia_semana',$d); 
-    }
-    public function scopeSolapaCon($q, string $ini, string $fin) {
-        return $q->where('hora_inicio','<',$fin)->where('hora_fin','>',$ini);
-    }
+
      public function scopeDeAulaDiaRango($query, int $aulaId, int $diaSemana, ?int $desdeMin = null, ?int $hastaMin = null)
     {
         $query->where('id_aula', $aulaId)
@@ -92,7 +97,10 @@ class CargaHoraria extends Model
     }
     public static function tieneAsignacionesAbiertas(int $periodoId): bool
         {
+            // si aún no existe la tabla (fresh install), no bloquear
         if (!Schema::hasTable('carga_horaria')) return false;
+
+        // Consideramos “abiertas” las que NO están anuladas
         return static::where(function ($q) {
                 $q->whereNull('estado')
                   ->orWhereIn('estado', ['Vigente','Modificado']);
@@ -101,7 +109,4 @@ class CargaHoraria extends Model
             ->exists();
         }
 
-    }
-
-    
-
+}

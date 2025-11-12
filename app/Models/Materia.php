@@ -15,6 +15,7 @@ class Materia extends Model
         'creditos',
         'horas_semanales',
         'programa',
+        'habilitado', 
     ];
 
     public function grupos()
