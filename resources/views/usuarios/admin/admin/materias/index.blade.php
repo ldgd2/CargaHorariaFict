@@ -6,10 +6,13 @@
     <h1 class="text-xl font-bold mb-3">Materias</h1>
     <form id="form-mat" class="grid grid--2">
       @csrf
-      <div class="field"><label class="field__label">Carrera (ID)</label><div class="field__box"><input class="field__input" name="id_carrera" required></div></div>
-      <div class="field"><label class="field__label">Código</label><div class="field__box"><input class="field__input" name="codigo" required></div></div>
+      
+      {{-- ⚠️ BLOQUE CARRERA ELIMINADO --}}
+      
+      <div class="field"><label class="field__label">Código</label><div class="field__box"><input class="field__input" name="cod_materia" required></div></div> 
       <div class="field"><label class="field__label">Nombre</label><div class="field__box"><input class="field__input" name="nombre" required></div></div>
       <div class="field"><label class="field__label">Horas/Semana</label><div class="field__box"><input class="field__input" type="number" min="1" name="horas_semanales" required></div></div>
+      {{-- Se usa grid-column:1/-1 para que el campo Programa ocupe las dos columnas --}}
       <div class="field" style="grid-column:1/-1"><label class="field__label">Programa (opcional)</label><div class="field__box"><textarea name="programa" class="field__textarea" rows="2"></textarea></div></div>
       <div><button class="btn btn--primary">Guardar</button></div>
     </form>
@@ -26,48 +29,108 @@
 
 <script>
 const API = {
-  index:  "{{ route('admin.materias.index') }}",
-  store:  "{{ route('admin.materias.store') }}",
-  update: (id)=>"{{ url('admin/materias') }}/"+id,
-  toggle: (id)=>"{{ url('admin/materias') }}/"+id+"/toggle",
+  index: 	"{{ route('admin.materias.index') }}",
+  store: 	"{{ route('admin.materias.store') }}",
+  update: (id)=>"{{ url('admin/materias-api') }}/"+id, 
+  toggle: (id)=>"{{ url('admin/materias-api') }}/"+id+"/toggle", 
 };
 const hdr = {'Accept':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}'};
 
+// ⚠️ CARRERAS_MAP ELIMINADO
+
 async function load(page=1,q=''){
   const u=new URL(API.index,location.origin); u.searchParams.set('page',page); if(q)u.searchParams.set('q',q);
-  const res=await fetch(u,{headers:hdr}); const data=await res.json(); render(data);
+  const res=await fetch(u,{headers:hdr}); 
+  if (res.ok) {
+    const data=await res.json(); 
+    render(data);
+  } else {
+    console.error("Error al cargar el listado de materias.");
+  }
 }
+
 function render(data){
-  const tr=(data.data||[]).map(m=>`
+  const tr=(data.data||[]).map(m=>{
+    // ⚠️ Se asume que el listado ya no muestra el nombre de carrera aquí
+    
+    return `
     <tr>
-      <td class="coor-td"><b>${m.nombre}</b><div class="text-muted">${m.codigo}</div></td>
-      <td class="coor-td">Carrera #${m.id_carrera}</td>
+      <td class="coor-td"><b>${m.nombre}</b><div class="text-muted">${m.cod_materia}</div></td> 
       <td class="coor-td">${m.horas_semanales}</td>
       <td class="coor-td">${m.habilitado?'Habilitado':'Inhabilitado'}</td>
       <td class="coor-td">
         <button class="btn btn--outline" onclick="toggle(${m.id_materia})">${m.habilitado?'Desactivar':'Activar'}</button>
       </td>
       <td class="coor-td">
-        <button class="btn btn--tonal" onclick="edit(${m.id_materia},${m.id_carrera},'${encodeURIComponent(m.codigo)}','${encodeURIComponent(m.nombre)}',${m.horas_semanales},'${encodeURIComponent(m.programa??'')}')">Editar</button>
+        {{-- ⚠️ Se pasa null o 0 en el lugar de id_carrera, pero se mantiene la estructura de la función edit --}}
+        <button class="btn btn--tonal" onclick="edit(${m.id_materia},null,'${encodeURIComponent(m.cod_materia)}','${encodeURIComponent(m.nombre)}',${m.horas_semanales},'${encodeURIComponent(m.programa??'')}')">Editar</button>
       </td>
-    </tr>`).join('');
+    </tr>`
+  }).join('');
+  
   document.getElementById('table').innerHTML=`
     <div class="coor-table-wrap"><table class="coor-recent" style="width:100%">
-      <thead><tr><th class="coor-th">Materia</th><th class="coor-th">Carrera</th><th class="coor-th">Horas</th><th class="coor-th">Estado</th><th class="coor-th">Acción</th><th class="coor-th">Editar</th></tr></thead>
-      <tbody>${tr||'<tr><td class="coor-td" colspan="6">Sin registros</td></tr>'}</tbody></table></div>`;
+      {{-- ⚠️ Columna 'Carrera' eliminada del encabezado --}}
+      <thead><tr><th class="coor-th">Materia</th><th class="coor-th">Horas</th><th class="coor-th">Estado</th><th class="coor-th">Acción</th><th class="coor-th">Editar</th></tr></thead>
+      <tbody>${tr||'<tr><td class="coor-td" colspan="5">Sin registros</td></tr>'}</tbody></table></div>`;
 }
-async function toggle(id){ await fetch(API.toggle(id),{method:'PATCH',headers:hdr}); load(); }
+
+async function toggle(id){ 
+  const res = await fetch(API.toggle(id),{method:'PATCH',headers:hdr}); 
+  if(res.ok){
+    alert('Estado de materia cambiado exitosamente.');
+    load(); 
+  } else {
+    const errorData = await res.json();
+    alert(errorData.error || 'Error al cambiar el estado de la materia.');
+  }
+}
+
+// ⚠️ Función edit corregida para ignorar idc
 function edit(id,idc,cod,nom,horas,prog){
   cod=decodeURIComponent(cod); nom=decodeURIComponent(nom); prog=decodeURIComponent(prog);
   const f=document.getElementById('form-mat'); f.dataset.editing=id;
-  f.id_carrera.value=idc; f.codigo.value=cod; f.nombre.value=nom; f.horas_semanales.value=horas; f.programa.value=prog;
-  f.querySelector('button').textContent='Guardar cambios'; f.scrollIntoView({behavior:'smooth'});
+  // f.id_carrera_select ya no existe, no se asigna
+  f.cod_materia.value=cod; 
+  f.nombre.value=nom; 
+  f.horas_semanales.value=horas; 
+  f.programa.value=prog;
+  f.querySelector('button').textContent='Guardar cambios'; 
+  f.scrollIntoView({behavior:'smooth'});
 }
+
 document.getElementById('form-mat').addEventListener('submit',async e=>{
-  e.preventDefault(); const fd=new FormData(e.target); const id=e.target.dataset.editing;
-  if(id){ await fetch(API.update(id),{method:'PUT',headers:hdr,body:fd}); delete e.target.dataset.editing; e.target.querySelector('button').textContent='Guardar'; }
-  else { await fetch(API.store,{method:'POST',headers:hdr,body:fd}); }
-  e.target.reset(); load();
+  e.preventDefault(); 
+  const f = e.target;
+  const fd=new FormData(f); 
+  const id=f.dataset.editing;
+  
+  let url = id ? API.update(id) : API.store;
+  let method = id ? 'PUT' : 'POST';
+  let successMessage = id ? 'Materia actualizada exitosamente.' : 'Materia guardada exitosamente.';
+
+  try {
+    const res = await fetch(url,{method:method,headers:hdr,body:fd});
+    
+    if(res.ok){
+      alert(successMessage); 
+      f.reset(); 
+      if(id) {
+        delete f.dataset.editing; 
+        f.querySelector('button').textContent='Guardar'; 
+      }
+      load(); 
+      
+    } else {
+      const errorData = await res.json();
+      const errorMessage = errorData.message || 'Error desconocido al guardar.';
+      alert('Error al guardar: ' + errorMessage);
+      console.error('Error de API:', errorData);
+    }
+  } catch (error) {
+    alert('Error de conexión con el servidor.');
+    console.error('Error de red:', error);
+  }
 });
 document.getElementById('q').addEventListener('input',e=>load(1,e.target.value));
 load();
