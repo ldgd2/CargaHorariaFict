@@ -9,7 +9,7 @@ use App\Http\Controllers\{
     AulaController, GrupoController, MateriaController, PeriodoAcademicoController,
     MateriaCarreraController, BloqueoAulaController, DisponibilidadDocenteController,
     AsistenciaSesionController, SesionDocenteTokenController, BitacoraController,
-    ReaperturaHistorialController, ReporteCargaHorariaController, CargaHorariaController,ImportacionController
+    ReaperturaHistorialController, ReporteCargaHorariaController,ReporteUsoAulaController, CargaHorariaController,ImportacionController, EditorSemanalController
 };
 
 // ===============================
@@ -132,6 +132,12 @@ Route::prefix('api')->group(function () {
     [CargaHorariaController::class,'apiDisponibilidadDocente']
     )->name('api.docente.disponibilidad');
 
+        // aplicar movimiento
+    Route::get('/cargas/editor', [EditorSemanalController::class, 'editor'])->name('cargas.editor');     // vista
+    Route::get('/cargas/grid',   [EditorSemanalController::class, 'apiGridWeek'])->name('cargas.grid');  // datos grid
+    Route::post('/cargas/check', [EditorSemanalController::class, 'apiValidateSlot'])->name('cargas.check'); // validar live
+    Route::patch('/cargas/drag', [EditorSemanalController::class, 'dragUpdate'])->name('cargas.drag');   // aplicar movimiento
+
 });
 
 Route::prefix('admin')->as('admin.')->middleware('auth')->group(function () {
@@ -139,7 +145,12 @@ Route::prefix('admin')->as('admin.')->middleware('auth')->group(function () {
     Route::post('/importacion', [ImportacionController::class,'import'])->name('import.run');
 });
 
-    // Entidades base
+Route::get('/reportes/uso-aulas/view', [ReporteUsoAulaController::class, 'view'])
+    ->name('reportes.uso_aulas.view');
+
+// API/descarga (json, pdf, xlsx)
+Route::get('/api/reporte-uso-aulas', [ReporteUsoAulaController::class, 'index'])
+    ->name('reportes.uso_aulas');
     Route::apiResource('aulas', AulaController::class);
     Route::apiResource('grupos', GrupoController::class);
     Route::apiResource('materias', MateriaController::class);

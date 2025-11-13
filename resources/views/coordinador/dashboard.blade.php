@@ -4,28 +4,31 @@
 
 @section('content')
 <style>
-
   .coor-stack{display:grid;gap:16px}
   .coor-top{display:grid;gap:16px}
+  .coor-grid-3{display:grid;gap:16px}
   .coor-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;padding:16px}
   .coor-kpi{margin:0}
   .coor-kpi h4{margin:0 0 4px 0;font-weight:700}
   .coor-kpi .num{font-size:28px;font-weight:800}
 
-
   .coor-table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--color-outline-variant);border-radius:var(--radius-s)}
   .coor-th,.coor-td{padding:8px 10px;text-align:left;vertical-align:middle}
   .coor-recent thead{background:rgba(255,255,255,.03)}
 
-  /* Badges de estado */
   .badge{padding:4px 10px;border-radius:999px;font-weight:800;font-size:.86rem;display:inline-block}
   .badge--outline{border:1px solid var(--color-outline-variant);color:var(--color-on-surface-variant);background:transparent}
   .badge--tonal{background:color-mix(in srgb,var(--color-primary) 18%, var(--color-surface));color:var(--color-on-surface)}
   .badge--primary{background:var(--color-primary);color:var(--color-on-primary)}
   .badge--text{background:transparent;color:var(--color-on-surface-variant)}
 
+  .card__actions{display:flex;gap:10px;flex-wrap:wrap}
+  .subtle{color:var(--color-on-surface-variant)}
+  .pill{padding:.25rem .6rem;border-radius:999px;border:1px solid var(--color-outline-variant);font-size:.8rem}
+
   @media (min-width: 960px){
-    .coor-top{grid-template-columns: 1fr 1fr}
+    .coor-top{grid-template-columns: 1fr auto}
+    .coor-grid-3{grid-template-columns: 1.2fr .8fr 1fr}
   }
 </style>
 
@@ -46,41 +49,65 @@
     </div>
   @endif
 
-  {{-- Bienvenida + formato de fecha --}}
+  {{-- Encabezado + formato de fecha + acceso rápido al Editor --}}
   <div class="card" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">
     <div>
       <h2 class="appbar__title" style="margin:0">¡Hola, {{ auth()->user()->nombre }}!</h2>
       <p class="text-muted" style="margin:.25rem 0 0 0;">
-        Panel de <strong>Coordinador</strong> — crea y gestiona los períodos académicos.
+        Panel de <strong>Coordinador</strong> — gestiona períodos y asignaciones de carga.
       </p>
     </div>
 
-    <div style="display:flex;align-items:center;gap:8px">
-      <label for="js-date-format" class="text-muted" style="font-weight:600">Formato de fecha</label>
-      <div class="field__box" style="padding:6px 10px">
-        <select id="js-date-format" class="field__input" style="min-width:150px">
-          <option value="d/m/Y">DD/MM/AAAA</option>
-          <option value="Y-m-d">AAAA-MM-DD</option>
-          <option value="m/d/Y">MM/DD/AAAA</option>
-          <option value="d M Y">DD Mon AAAA</option>
-        </select>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label for="js-date-format" class="text-muted" style="font-weight:600">Formato de fecha</label>
+        <div class="field__box" style="padding:6px 10px">
+          <select id="js-date-format" class="field__input" style="min-width:150px">
+            <option value="d/m/Y">DD/MM/AAAA</option>
+            <option value="Y-m-d">AAAA-MM-DD</option>
+            <option value="m/d/Y">MM/DD/AAAA</option>
+            <option value="d M Y">DD Mon AAAA</option>
+          </select>
+        </div>
       </div>
+
+      {{-- CTA al Editor Semanal (CU13) --}}
+      <a href="{{ route('cargas.editor') }}" class="btn btn--primary">🗓️ Editor semanal</a>
     </div>
   </div>
 
-  {{-- Acciones rápidas + Último período --}}
-  <div class="coor-top">
+  {{-- Bloque superior: Acciones rápidas | Último período | Editor semanal --}}
+  @php
+    $statsUrl = \Illuminate\Support\Facades\Route::has('periodos.stats')
+        ? route('periodos.stats') : url('/periodos/stats');
+
+    $cargaCreate = \Illuminate\Support\Facades\Route::has('carga.create')
+        ? route('carga.create') : url('/cargas/nueva');
+
+    $cargaIndex = \Illuminate\Support\Facades\Route::has('cargas.index')
+        ? route('cargas.index') : url('/cargas');
+
+    $confIndex = \Illuminate\Support\Facades\Route::has('cargas.conflictos')
+        ? route('cargas.conflictos') : $cargaIndex;
+  @endphp
+
+  <div class="coor-grid-3">
+    {{-- Acciones rápidas --}}
     <div class="card">
-      <p class="text-muted" style="margin:0 0 10px 0;">Acciones rápidas</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <p class="subtle" style="margin:0 0 10px 0;">Acciones rápidas</p>
+      <div class="card__actions">
         <a href="{{ route('periodos.index') }}" class="btn btn--primary">➕ Crear período</a>
         <a href="{{ route('periodos.index') }}" class="btn btn--tonal">📋 Ver/editar períodos</a>
+        <a href="{{ $cargaCreate }}" class="btn btn--outline">➕ Asignar carga (CU8)</a>
       </div>
+      <p class="subtle" style="margin:10px 0 0 0">
+        También puedes revisar <a class="pill" href="{{ $confIndex }}">⚠️ Conflictos</a> y <a class="pill" href="{{ $cargaIndex }}">📚 Cargas</a>.
+      </p>
     </div>
 
+    {{-- Último período --}}
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Último período</h3>
-
       @isset($ultimo)
         @php
           $fiIso = !empty($ultimo->fecha_inicio) ? \Illuminate\Support\Carbon::parse($ultimo->fecha_inicio)->toDateString() : null;
@@ -104,44 +131,52 @@
           <time class="js-date" data-iso="{{ $ffIso }}">{{ $ffIso ?? '—' }}</time>
         </p>
 
-        <div class="mt-3">
+        <div class="card__actions" style="margin-top:10px">
           <a href="{{ route('periodos.index') }}" class="btn btn--outline">Gestionar períodos</a>
+          {{-- abrir editor con el período preseleccionado vía query --}}
+          <a href="{{ route('cargas.editor') }}?id_periodo={{ $ultimo->id_periodo }}" class="btn btn--primary">🗓️ Abrir en Editor</a>
         </div>
       @else
         <p class="text-muted" style="margin:0 0 .5rem 0;">Aún no hay períodos registrados.</p>
         <a href="{{ route('periodos.index') }}" class="btn btn--primary">Crear el primero</a>
       @endisset
     </div>
+
+    {{-- Editor semanal (resumen / acceso) --}}
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Editor semanal (CU13)</h3>
+      <p class="subtle" style="margin:0 0 10px 0;">
+        Arrastra y suelta bloques para ajustar <strong>Docente · Aula · Día/Hora</strong> con validación visual en vivo.
+      </p>
+      <ul class="subtle" style="margin:0 0 10px 18px">
+        <li>Rojo: conflicto (docente/aula ocupado)</li>
+        <li>Amarillo: fuera de disponibilidad</li>
+        <li>Verde: posición válida</li>
+      </ul>
+      <div class="card__actions">
+        <a href="{{ route('cargas.editor') }}" class="btn btn--primary">Abrir editor</a>
+        <a href="{{ $cargaIndex }}" class="btn btn--tonal">Ver cargas</a>
+      </div>
+    </div>
   </div>
 
   {{-- KPIs (con auto-actualización) --}}
-
-@php
-  $statsUrl = \Illuminate\Support\Facades\Route::has('periodos.stats')
-      ? route('periodos.stats')
-      : url('/periodos/stats'); 
-@endphp
-
-<div class="card" style="padding:0;" data-stats-url="{{ $statsUrl }}">
-
-
-<div class="card" style="padding:0" data-stats-url="{{ $statsUrl }}">
-  <div class="coor-kpis">
-    <div class="card coor-kpi"><h4>Total</h4><div id="kpi-total" class="num">{{ $stats['total'] ?? 0 }}</div></div>
-    <div class="card coor-kpi"><h4>Borrador</h4><div id="kpi-borrador" class="num">{{ $stats['borrador'] ?? 0 }}</div></div>
-    <div class="card coor-kpi"><h4>Activos</h4><div id="kpi-activo" class="num">{{ $stats['activo'] ?? 0 }}</div></div>
-    <div class="card coor-kpi"><h4>Publicados</h4><div id="kpi-publicado" class="num">{{ $stats['publicado'] ?? 0 }}</div></div>
-    @if(isset($stats['archivado']))
-      <div class="card coor-kpi"><h4>Archivados</h4><div id="kpi-archivado" class="num">{{ $stats['archivado'] ?? 0 }}</div></div>
-    @endif
+  <div class="card" style="padding:0" data-stats-url="{{ $statsUrl }}">
+    <div class="coor-kpis">
+      <div class="card coor-kpi"><h4>Total</h4><div id="kpi-total" class="num">{{ $stats['total'] ?? 0 }}</div></div>
+      <div class="card coor-kpi"><h4>Borrador</h4><div id="kpi-borrador" class="num">{{ $stats['borrador'] ?? 0 }}</div></div>
+      <div class="card coor-kpi"><h4>Activos</h4><div id="kpi-activo" class="num">{{ $stats['activo'] ?? 0 }}</div></div>
+      <div class="card coor-kpi"><h4>Publicados</h4><div id="kpi-publicado" class="num">{{ $stats['publicado'] ?? 0 }}</div></div>
+      @if(isset($stats['archivado']))
+        <div class="card coor-kpi"><h4>Archivados</h4><div id="kpi-archivado" class="num">{{ $stats['archivado'] ?? 0 }}</div></div>
+      @endif
+    </div>
   </div>
-</div>
 
-
-  {{-- Recientes (opcional) --}}
+  {{-- Recientes --}}
   @isset($recientes)
     <div class="card">
-      <h3 style="margin:0 0 10px 0;">Recientes</h3>
+      <h3 style="margin:0 0 10px 0;">Períodos recientes</h3>
       <div class="coor-table-wrap">
         <table class="min-w-full coor-recent" style="width:100%">
           <thead>
@@ -150,7 +185,7 @@
               <th class="coor-th">Inicio</th>
               <th class="coor-th">Fin</th>
               <th class="coor-th">Estado</th>
-              <th class="coor-th"></th>
+              <th class="coor-th" style="width:240px"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
@@ -163,14 +198,19 @@
                 $b = match($st){
                   'borrador'=>'badge--outline','activo'=>'badge--tonal',
                   'publicado'=>'badge--primary','archivado'=>'badge--text', default=>'badge--outline'
-                }; 
+                };
               @endphp
               <tr>
                 <td class="coor-td">{{ $p->nombre ?? '—' }}</td>
                 <td class="coor-td"><time class="js-date" data-iso="{{ $pfiIso }}">{{ $pfiIso ?? '—' }}</time></td>
                 <td class="coor-td"><time class="js-date" data-iso="{{ $pffIso }}">{{ $pffIso ?? '—' }}</time></td>
                 <td class="coor-td"><span class="badge {{ $b }}">{{ ucfirst($st) }}</span></td>
-                <td class="coor-td"><a class="btn btn--outline" href="{{ route('periodos.index') }}">Abrir</a></td>
+                <td class="coor-td">
+                  <div class="card__actions">
+                    <a class="btn btn--outline" href="{{ route('periodos.index') }}">Gestionar</a>
+                    <a class="btn btn--primary" href="{{ route('cargas.editor') }}?id_periodo={{ $p->id_periodo }}">🗓️ Abrir en Editor</a>
+                  </div>
+                </td>
               </tr>
             @empty
               <tr><td colspan="5" class="coor-td text-center text-muted">Sin registros.</td></tr>
@@ -183,47 +223,7 @@
 
 </div>
 
-@php
-  $cargaCreate = \Illuminate\Support\Facades\Route::has('carga.create')
-      ? route('carga.create') : url('/cargas/nueva');
-
-  $cargaIndex = \Illuminate\Support\Facades\Route::has('cargas.index')
-      ? route('cargas.index') : url('/cargas'); 
-
-  $confIndex = \Illuminate\Support\Facades\Route::has('cargas.conflictos')
-      ? route('cargas.conflictos') : $cargaIndex;
-@endphp
-
-<div class="card">
-  <h3 style="margin:0 0 8px 0;">Asignación de carga (CU8)</h3>
-  <p class="text-muted" style="margin:0 0 10px 0;">
-    Asigna <strong>Docente + Aula</strong> a un <strong>Grupo</strong> con validaciones de
-    <em>disponibilidad</em>, <em>solapes</em>, <em>bloqueos</em> y <em>tope semanal</em>.
-  </p>
-
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <a href="{{ $cargaCreate }}" class="btn btn--primary">➕ Asignar carga</a>
-    <a href="{{ $cargaIndex }}" class="btn btn--tonal">📚 Ver cargas</a>
-    <a href="{{ $confIndex }}" class="btn btn--outline">⚠️ Conflictos</a>
-  </div>
-
-  {{-- KPIs opcionales de carga (si expones /cargas/stats en JSON) --}}
-  @php
-    $cStatsUrl = \Illuminate\Support\Facades\Route::has('cargas.stats')
-        ? route('cargas.stats') : null;
-  @endphp
-
-  @if($cStatsUrl)
-    <div class="coor-kpis" style="margin-top:12px" data-cargas-stats="{{ $cStatsUrl }}">
-      <div class="card coor-kpi"><h4>Vigentes</h4><div id="kpi-c-vig" class="num">0</div></div>
-      <div class="card coor-kpi"><h4>Conflictos</h4><div id="kpi-c-conf" class="num">0</div></div>
-      <div class="card coor-kpi"><h4>Anuladas</h4><div id="kpi-c-anu" class="num">0</div></div>
-    </div>
-  @endif
-</div>
-
-
-{{-- JS: formato de fecha + actualización de KPIs --}}
+{{-- JS: formato de fecha + KPIs en vivo --}}
 <script>
 (function(){
   const key = 'date_fmt';
@@ -250,12 +250,9 @@
     });
   }
 
-  // Init formato
   const saved = localStorage.getItem(key) || 'd/m/Y';
   select.value = saved; applyFormat(saved);
-  select.addEventListener('change', ()=>{
-    const fmt = select.value; localStorage.setItem(key, fmt); applyFormat(fmt);
-  });
+  select.addEventListener('change', ()=>{ const fmt = select.value; localStorage.setItem(key, fmt); applyFormat(fmt); });
 
   // KPIs en vivo
   const statsBox = document.querySelector('[data-stats-url]');
@@ -271,12 +268,12 @@
       set('kpi-borrador', s.borrador);
       set('kpi-activo', s.activo);
       set('kpi-publicado', s.publicado);
-      set('kpi-archivado', s.archivado);
+      if('archivado' in s) set('kpi-archivado', s.archivado);
     }catch(_){}
   }
   refreshKPIs();
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshKPIs(); });
-  setInterval(refreshKPIs, 12000); // cada 12s
+  setInterval(refreshKPIs, 12000);
 })();
 </script>
 @endsection

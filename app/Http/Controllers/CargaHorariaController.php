@@ -1,6 +1,5 @@
 <?php
 namespace App\Http\Controllers;
-
 use Carbon\Carbon;
 use App\Models\CargaHoraria;
 use App\Models\PeriodoAcademico;
@@ -296,8 +295,6 @@ class CargaHorariaController extends Controller
                     'estado'          => 'Vigente',
                 ]);
                 $c->save();
-
-                $this->ensureBloqueoAula($aula, $perIni, $perFin);
             });
 
             return redirect()->route('coordinador.dashboard')->with('ok','Carga asignada correctamente.');
@@ -393,8 +390,6 @@ class CargaHorariaController extends Controller
                 return back()->withErrors($errores ?: ['No se pudo crear ninguna carga.'])->withInput();
             }
 
-            $this->ensureBloqueoAula($aula, $perIni, $perFin);
-
             DB::commit();
             return redirect()->route('coordinador.dashboard')
                 ->with('ok', "Cargas creadas: $creados" . (count($errores) ? ' | Con advertencias: '.implode(' · ', $errores) : ''));
@@ -433,24 +428,151 @@ class CargaHorariaController extends Controller
         return $first->lte($end);
     }
 
-    private function ensureBloqueoAula(int $idAula, Carbon $perIni, Carbon $perFin): void
+    public function editor(Request $r)
     {
-        if (!Schema::hasTable('bloqueo_aula')) return;
+        $periodos = PeriodoAcademico::select('id_periodo','nombre','fecha_inicio','fecha_fin','estado_publicacion')
+            ->orderByDesc('id_periodo')->limit(50)->get();
 
-        $existe = DB::table('bloqueo_aula')
-            ->where('id_aula', $idAula)
-            ->whereDate('fecha_fin', '>=', $perIni->toDateString())
-            ->whereDate('fecha_inicio', '<=', $perFin->toDateString())
-            ->exists();
-
-        if ($existe) return;
-
-        DB::table('bloqueo_aula')->insert([
-            'id_aula'       => $idAula,
-            'fecha_inicio'  => $perIni->toDateString(),
-            'fecha_fin'     => $perFin->toDateString(),
-            'motivo'        => 'Reserva exclusiva del aula por período (cargas asignadas).',
-            'registrado_por'=> Auth::id(),
-        ]);
+        // Estos endpoints ya existen en tu controller actual:
+        $gridUrl   = route('cargas.grid');     // GET
+        $checkUrl  = route('cargas.check');    // POST
+        $dragUrl   = route('cargas.drag');     // PATCH
+        $docUrl    = url('/api/docentes');     // ajusta si expusiste apiDocentes con otra ruta
+        $aulaUrl   = url('/api/aulas');        // ajusta si expusiste apiAulas con otra ruta
+        
+        return view('carga.editor-semanal', compact('periodos','gridUrl','checkUrl','dragUrl','docUrl','aulaUrl'));
     }
+    public function apiValidateSlot(Request $r)
+{
+    $data = $r->validate([
+        'id_periodo'  => ['required','integer','exists:periodo_academico,id_periodo'],
+        'id_carga'    => ['nullable','integer','exists:carga_horaria,id_carga_horaria'],
+        'id_grupo'    => ['nullable','integer','exists:grupo,id_grupo'],
+        'id_docente'  => ['required','integer','exists:docente,id_docente'],
+        'id_aula'     => ['required','integer','exists:aula,id_aula'],
+        'dia_semana'  => ['required','integer','between:1,7'],
+        'hora_inicio' => ['required','date_format:H:i'],
+        'hora_fin'    => ['required','date_format:H:i','after:hora_inicio'],
+    ]);
+
+    $resultado = $this->checkSlotConflicts($data, /*excludeId:*/ $data['id_carga'] ?? null);
+    return response()->json($resultado, $resultado['ok'] ? 200 : 200); // siempre 200; el front pinta por ok/errores
+}
+public function dragUpdate(Request $r)
+{
+    $data = $r->validate([
+        'id_carga'    => ['required','integer','exists:carga_horaria,id_carga_horaria'],
+        'id_periodo'  => ['required','integer','exists:periodo_academico,id_periodo'],
+        'id_grupo'    => ['required','integer','exists:grupo,id_grupo'],
+        'id_docente'  => ['required','integer','exists:docente,id_docente'],
+        'id_aula'     => ['required','integer','exists:aula,id_aula'],
+        'dia_semana'  => ['required','integer','between:1,7'],
+        'hora_inicio' => ['required','date_format:H:i'],
+        'hora_fin'    => ['required','date_format:H:i','after:hora_inicio'],
+    ]);
+
+    // Estado del período
+    $estadoCol = Schema::hasColumn('periodo_academico','estado') ? 'estado'
+              : (Schema::hasColumn('periodo_academico','estado_publicacion') ? 'estado_publicacion' : null);
+    if ($estadoCol) {
+        $ok = PeriodoAcademico::where('id_periodo',$data['id_periodo'])
+            ->whereIn($estadoCol, ['EnAsignacion','Reabierto','Activo','Publicado','publicado'])
+            ->exists();
+        abort_if(!$ok, 422, 'El período no permite asignación.');
+    }
+
+    // Validaciones de conflicto
+    $res = $this->checkSlotConflicts($data, $data['id_carga']);
+    if (!$res['ok']) {
+        return response()->json($res, 422);
+    }
+
+    // Guardar
+    $affected = DB::table('carga_horaria')
+        ->where('id_carga_horaria',$data['id_carga'])
+        ->update([
+            'id_grupo'    => $data['id_grupo'],
+            'id_docente'  => $data['id_docente'],
+            'id_aula'     => $data['id_aula'],
+            'dia_semana'  => $data['dia_semana'],
+            'hora_inicio' => $data['hora_inicio'],
+            'hora_fin'    => $data['hora_fin'],
+        ]);
+
+    return response()->json([
+        'ok'      => true,
+        'updated' => (bool)$affected,
+        'msg'     => 'Actualizado',
+    ]);
+}
+
+private function checkSlotConflicts(array $d, ?int $excludeId = null): array
+{
+    $errores    = [];
+    $avisos     = [];
+    $conflictos = ['docente'=>false,'aula'=>false,'disponibilidad'=>false,'bloqueo'=>false];
+
+    // Período para filtrar bloqueos por rango (solo lectura)
+    $perRow = PeriodoAcademico::select('fecha_inicio','fecha_fin')->find((int)$d['id_periodo']);
+    $perIni = $perRow ? Carbon::parse($perRow->fecha_inicio)->startOfDay() : null;
+    $perFin = $perRow ? Carbon::parse($perRow->fecha_fin)->endOfDay()   : null;
+
+    // 1) Disponibilidad docente exacta
+    $tieneDisp = DisponibilidadDocente::query()
+        ->where('id_docente', (int)$d['id_docente'])
+        ->where('id_periodo',(int)$d['id_periodo'])
+        ->where('dia_semana',(int)$d['dia_semana'])
+        ->where('hora_inicio','<=',$d['hora_inicio'])
+        ->where('hora_fin','>=',$d['hora_fin'])
+        ->exists();
+    if (!$tieneDisp) {
+        $conflictos['disponibilidad']=true;
+        $avisos[] = 'Fuera de disponibilidad del docente (E3).';
+    }
+
+    // 2) Solape de docente (excluir self si aplica)
+    $qDoc = DB::table('carga_horaria')
+        ->where('id_docente',(int)$d['id_docente'])
+        ->where('dia_semana',(int)$d['dia_semana'])
+        ->where('hora_inicio','<',$d['hora_fin'])
+        ->where('hora_fin','>',$d['hora_inicio']);
+    if ($excludeId) $qDoc->where('id_carga_horaria','<>',$excludeId);
+    if ($qDoc->exists()) {
+        $conflictos['docente']=true;
+        $errores[] = 'Solape de docente con otra carga (E1).';
+    }
+
+    // 3) Solape de aula (excluir self si aplica)
+    $qAula = DB::table('carga_horaria')
+        ->where('id_aula',(int)$d['id_aula'])
+        ->where('dia_semana',(int)$d['dia_semana'])
+        ->where('hora_inicio','<',$d['hora_fin'])
+        ->where('hora_fin','>',$d['hora_inicio']);
+    if ($excludeId) $qAula->where('id_carga_horaria','<>',$excludeId);
+    if ($qAula->exists()) {
+        $conflictos['aula']=true;
+        $errores[] = 'Aula ocupada en esa franja (E2).';
+    }
+
+    // 4) Bloqueo de aula (solo lectura; si tienes la tabla y período)
+    if ($perIni && $perFin && Schema::hasTable('bloqueo_aula')) {
+        $hayBloqueo = DB::table('bloqueo_aula')
+            ->where('id_aula',(int)$d['id_aula'])
+            ->whereDate('fecha_fin','>=',$perIni->toDateString())
+            ->whereDate('fecha_inicio','<=',$perFin->toDateString())
+            ->exists();
+        if ($hayBloqueo) {
+            $conflictos['bloqueo']=true;
+            $errores[] = 'Aula bloqueada en el período seleccionado.';
+        }
+    }
+
+    // ok = no errores críticos; avisos (p.ej., disponibilidad) no bloquean si así lo decides.
+    $ok = empty($errores);
+    return compact('ok','errores','avisos','conflictos');
+}
+
+
+
+
 }
