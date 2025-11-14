@@ -9,27 +9,65 @@ use App\Http\Controllers\{
     AulaController, GrupoController, MateriaController, PeriodoAcademicoController,
     MateriaCarreraController, BloqueoAulaController, DisponibilidadDocenteController,
     AsistenciaSesionController, SesionDocenteTokenController, BitacoraController,
-    ReaperturaHistorialController, ReporteCargaHorariaController,ReporteUsoAulaController, CargaHorariaController,ImportacionController, EditorSemanalController
+    ReaperturaHistorialController, ReporteCargaHorariaController, ReporteUsoAulaController, CargaHorariaController, ImportacionController, EditorSemanalController,
+    ReporteAuditoriaController, // Controlador para CU9
+    AuditoriaController, // Controlador para CU12
+    HorarioCicloController // <--- ¡Controlador para CU10/CU11!
 };
 
 // ===============================
 // PÚBLICO / AUTH
 // ===============================
 Route::get('/', fn () => view('auth.login'));
-Route::get('/login',  [AuthController::class,'showLogin'])->name('login');
+Route::get('/login', [AuthController::class,'showLogin'])->name('login');
 Route::post('/login', [AuthController::class,'login'])->name('login.post');
-Route::post('/logout',[AuthController::class,'logout'])->name('logout');
+Route::post('/logout', [AuthController::class,'logout'])->name('logout');
 
 // ===============================
 // RUTAS CON AUTENTICACIÓN
 // ===============================
 Route::middleware('auth')->group(function () {
-
+    
     // ---------------------------
     // Coordinador (panel)
     // ---------------------------
     Route::get('/coordinador', [CoordinadorController::class, 'index'])
         ->name('coordinador.dashboard');
+    
+    // ---------------------------
+    // CU9: REPORTES ESENCIALES
+    // ---------------------------
+    Route::prefix('coordinador/reportes')->as('coordinador.reportes.')->group(function () {
+        Route::get('/', [ReporteAuditoriaController::class, 'index'])->name('index'); 
+        Route::get('/generar', [ReporteAuditoriaController::class, 'generar'])->name('generar');
+        Route::get('/preview', [ReporteAuditoriaController::class, 'preview'])->name('preview');
+        Route::get('/exportar-xlsx', [ReporteAuditoriaController::class, 'exportXLSX'])->name('exportXLSX');
+    });
+
+    // ---------------------------
+    // CU12: AUDITORÍA Y CONFLICTOS
+    // ---------------------------
+    Route::prefix('coordinador/auditoria')->as('coordinador.auditoria.')->group(function () {
+        Route::get('/', [AuditoriaController::class, 'index'])->name('index'); 
+        Route::post('/refrescar', [AuditoriaController::class, 'refrescar'])->name('refrescar');
+        Route::get('/listar', [AuditoriaController::class, 'listar'])->name('listar');
+    });
+
+    // ---------------------------
+    // CU10/CU11: GESTIÓN DE PUBLICACIÓN DEL CICLO <--- ¡BLOQUE AGREGADO Y CORREGIDO!
+    // Rutas resultantes: coordinador.gestion_ciclo.index, coordinador.gestion_ciclo.publicar, etc.
+    // ---------------------------
+    Route::prefix('coordinador/gestion-ciclo')->as('coordinador.gestion_ciclo.')->group(function () {
+        
+        // RUTA FALTANTE (index): Apunta al método 'index' en HorarioCicloController.
+        Route::get('/', [HorarioCicloController::class, 'index'])->name('index'); 
+
+        // RUTA AJAX para Publicar
+        Route::post('/publicar', [HorarioCicloController::class, 'publicarHorarios'])->name('publicar');
+        
+        // RUTA AJAX para Reabrir
+        Route::post('/reabrir', [HorarioCicloController::class, 'reabrirHorarios'])->name('reabrir');
+    });
 
     // ---------------------------
     // Periodos: acciones extra
@@ -55,13 +93,13 @@ Route::middleware('auth')->group(function () {
 
         // Roles (módulo)
         Route::prefix('roles')->as('roles.')->group(function () {
-            Route::get('/',                 [RolController::class,'index'])->name('index');
-            Route::post('/',                [RolController::class,'store'])->name('store');
-            Route::put('/{rol}',            [RolController::class,'update'])->name('update');
-            Route::patch('/{rol}/toggle',   [RolController::class,'toggle'])->name('toggle');
-            Route::delete('/{rol}',         [RolController::class,'destroy'])->name('destroy');
-            Route::post('/asignar',         [RolController::class,'asignarRol'])->name('asignar');
-            Route::delete('/revocar',       [RolController::class,'revocarRol'])->name('revocar');
+            Route::get('/', [RolController::class,'index'])->name('index');
+            Route::post('/', [RolController::class,'store'])->name('store');
+            Route::put('/{rol}', [RolController::class,'update'])->name('update');
+            Route::patch('/{rol}/toggle', [RolController::class,'toggle'])->name('toggle');
+            Route::delete('/{rol}', [RolController::class,'destroy'])->name('destroy');
+            Route::post('/asignar', [RolController::class,'asignarRol'])->name('asignar');
+            Route::delete('/revocar', [RolController::class,'revocarRol'])->name('revocar');
         });
     });
 
@@ -71,7 +109,7 @@ Route::middleware('auth')->group(function () {
     Route::prefix('docente')->as('docente.')->group(function () {
         Route::get('/', [DocenteController::class, 'dashboard'])->name('dashboard');
         Route::get('/disponibilidad', [DocenteController::class, 'disponibilidad'])->name('disp.view');
-        Route::get('/mi-disponibilidad', [DisponibilidadDocenteController::class, 'index'])->name('disp.index');  // ?id_periodo=#
+        Route::get('/mi-disponibilidad', [DisponibilidadDocenteController::class, 'index'])->name('disp.index'); 
         Route::post('/mi-disponibilidad', [DisponibilidadDocenteController::class, 'store'])->name('disp.store');
         Route::match(['put','patch'],'/mi-disponibilidad/{disponibilidad}', [DisponibilidadDocenteController::class, 'update'])->name('disp.update');
         Route::delete('/mi-disponibilidad/{disponibilidad}', [DisponibilidadDocenteController::class, 'destroy'])->name('disp.destroy');
@@ -81,22 +119,21 @@ Route::middleware('auth')->group(function () {
     });
 
     // ---------------------------
-    //  Asignación de carga (UI + APIs auxiliares)
+    //  Asignación de carga (UI + APIs auxiliares)
     // ---------------------------
-    Route::get('/carga/nueva',  [CargaHorariaController::class,'create'])->name('carga.create');
-Route::post('/carga',       [CargaHorariaController::class,'store'])->name('carga.store'); // si quieres mantener individual
-Route::post('/carga/batch',[CargaHorariaController::class,'storeBatch'])->name('carga.storeBatch'); // <- NUEVA
+    Route::get('/carga/nueva', [CargaHorariaController::class,'create'])->name('carga.create');
+    Route::post('/carga', [CargaHorariaController::class,'store'])->name('carga.store'); 
+    Route::post('/carga/batch', [CargaHorariaController::class,'storeBatch'])->name('carga.storeBatch'); 
 
     // APIs de apoyo para selects/UX 
     Route::prefix('api')->group(function () {
         Route::get('/periodos', [CargaHorariaController::class,'apiPeriodos'])->name('api.periodos');
-        Route::get('/api/periodos', [CargaHorariaController::class,'apiPeriodos'])->name('api.periodos');
-        Route::get('/api/grupos',   [CargaHorariaController::class,'apiGrupos'])->name('api.grupos');
-        Route::get('/api/docentes', [CargaHorariaController::class,'apiDocentes'])->name('api.docentes');
-        Route::get('/api/aulas',    [CargaHorariaController::class,'apiAulas'])->name('api.aulas');
-        Route::get('/api/docentes/{docenteId}/disponibilidad',
-  [\App\Http\Controllers\CargaHorariaController::class, 'apiDisponibilidadDocente']
-            )->name('api.docente.disponibilidad');
+        Route::get('/grupos', [CargaHorariaController::class,'apiGrupos'])->name('api.grupos');
+        Route::get('/docentes', [CargaHorariaController::class,'apiDocentes'])->name('api.docentes');
+        Route::get('/aulas', [CargaHorariaController::class,'apiAulas'])->name('api.aulas');
+        Route::get('/docentes/{docenteId}/disponibilidad',
+            [\App\Http\Controllers\CargaHorariaController::class, 'apiDisponibilidadDocente']
+        )->name('api.docente.disponibilidad');
     });
 
     // ---------------------------
@@ -122,35 +159,28 @@ Route::post('/carga/batch',[CargaHorariaController::class,'storeBatch'])->name('
         'asistencia-sesion' => 'id'
     ]);
 
-    // APIs de apoyo para selects/UX (aisladas bajo /api)
-Route::prefix('api')->group(function () {
-    Route::get('/periodos', [CargaHorariaController::class,'apiPeriodos'])->name('api.periodos');
-    Route::get('/grupos',   [CargaHorariaController::class,'apiGrupos'])->name('api.grupos');  // <- nombra también
-    Route::get('/docentes', [CargaHorariaController::class,'apiDocentes'])->name('api.docentes'); // <- necesario
-    Route::get('/aulas',    [CargaHorariaController::class,'apiAulas'])->name('api.aulas');       // <- necesario
-    Route::get('/api/docentes/{docenteId}/disponibilidad',
-    [CargaHorariaController::class,'apiDisponibilidadDocente']
-    )->name('api.docente.disponibilidad');
+    // APIs de apoyo para selects/UX (aisladas bajo /api) 
+    Route::prefix('api')->group(function () {
+        // CU13: Editor Semanal (APIs)
+        Route::get('/cargas/editor', [EditorSemanalController::class, 'editor'])->name('cargas.editor'); 
+        Route::get('/cargas/grid', [EditorSemanalController::class, 'apiGridWeek'])->name('cargas.grid'); 
+        Route::post('/cargas/check', [EditorSemanalController::class, 'apiValidateSlot'])->name('cargas.check'); 
+        Route::patch('/cargas/drag', [EditorSemanalController::class, 'dragUpdate'])->name('cargas.drag'); 
+    });
 
-        // aplicar movimiento
-    Route::get('/cargas/editor', [EditorSemanalController::class, 'editor'])->name('cargas.editor');     // vista
-    Route::get('/cargas/grid',   [EditorSemanalController::class, 'apiGridWeek'])->name('cargas.grid');  // datos grid
-    Route::post('/cargas/check', [EditorSemanalController::class, 'apiValidateSlot'])->name('cargas.check'); // validar live
-    Route::patch('/cargas/drag', [EditorSemanalController::class, 'dragUpdate'])->name('cargas.drag');   // aplicar movimiento
+    Route::prefix('admin')->as('admin.')->middleware('auth')->group(function () {
+        Route::get('/importacion', [ImportacionController::class,'form'])->name('import.form');
+        Route::post('/importacion', [ImportacionController::class,'import'])->name('import.run');
+    });
 
-});
+    Route::get('/reportes/uso-aulas/view', [ReporteUsoAulaController::class, 'view'])
+        ->name('reportes.uso_aulas.view');
 
-Route::prefix('admin')->as('admin.')->middleware('auth')->group(function () {
-    Route::get('/importacion',  [ImportacionController::class,'form'])->name('import.form');
-    Route::post('/importacion', [ImportacionController::class,'import'])->name('import.run');
-});
-
-Route::get('/reportes/uso-aulas/view', [ReporteUsoAulaController::class, 'view'])
-    ->name('reportes.uso_aulas.view');
-
-// API/descarga (json, pdf, xlsx)
-Route::get('/api/reporte-uso-aulas', [ReporteUsoAulaController::class, 'index'])
-    ->name('reportes.uso_aulas');
+    // API/descarga (json, pdf, xlsx)
+    Route::get('/api/reporte-uso-aulas', [ReporteUsoAulaController::class, 'index'])
+        ->name('reportes.uso_aulas');
+        
+    // Resources API
     Route::apiResource('aulas', AulaController::class);
     Route::apiResource('grupos', GrupoController::class);
     Route::apiResource('materias', MateriaController::class);

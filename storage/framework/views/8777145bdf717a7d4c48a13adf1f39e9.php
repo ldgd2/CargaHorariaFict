@@ -1,8 +1,6 @@
-@extends('layouts.app')
+<?php $__env->startSection('title','Panel del Coordinador'); ?>
 
-@section('title','Panel del Coordinador')
-
-@section('content')
+<?php $__env->startSection('content'); ?>
 <style>
   .coor-stack{display:grid;gap:16px}
   .coor-top{display:grid;gap:16px}
@@ -34,53 +32,53 @@
 
 <div class="app-container coor-stack">
 
-  {{-- Flash --}}
-  @if (session('ok'))
-    <div class="snackbar snackbar--ok">{{ session('ok') }}</div>
-  @endif
-  @if ($errors->any())
+  
+  <?php if(session('ok')): ?>
+    <div class="snackbar snackbar--ok"><?php echo e(session('ok')); ?></div>
+  <?php endif; ?>
+  <?php if($errors->any()): ?>
     <div class="snackbar snackbar--error">
       <strong>Revisa los campos:</strong>
       <ul class="mt-2" style="margin-left:18px;">
-        @foreach ($errors->all() as $e)
-          <li>{{ $e }}</li>
-        @endforeach
+        <?php $__currentLoopData = $errors->all(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $e): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+          <li><?php echo e($e); ?></li>
+        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
       </ul>
     </div>
-  @endif
+  <?php endif; ?>
 
-  {{-- Encabezado + formato de fecha + acceso rápido al Editor --}}
+  
   <div class="card" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">
     <div>
-      <h2 class="appbar__title" style="margin:0">¡Hola, {{ auth()->user()->nombre }}!</h2>
+      <h2 class="appbar__title" style="margin:0">¡Hola, <?php echo e(auth()->user()->nombre); ?>!</h2>
       <p class="text-muted" style="margin:.25rem 0 0 0;">
         Panel de <strong>Coordinador</strong> — gestiona períodos y asignaciones de carga.
       </p>
     </div>
-    {{-- BLOQUE 2: Planificación y Auditoría (Casos CU9, CU10/CU11, CU12) --}}
+    
     <div class="grid grid--3">
         
-        {{-- CU9: REPORTES ESENCIALES --}}
+        
         <div class="card">
             <h2 style="margin:0 0 6px 0;">📊 Reportes Esenciales</h2>
             <p class="text-muted mb-3">Generar reportes de carga y asistencia (PDF/XLSX).</p>
-            <a href="{{ route('coordinador.reportes.index', ['tab' => 'reportes']) }}" class="btn btn--primary">Generar Reportes</a>
+            <a href="<?php echo e(route('coordinador.reportes.index', ['tab' => 'reportes'])); ?>" class="btn btn--primary">Generar Reportes</a>
         </div>
         
-        {{-- CU12: AUDITORÍA Y CONFLICTOS --}}
+        
         <div class="card">
             <h2 style="margin:0 0 6px 0;">🚨 Auditoría y Conflictos</h2>
             <p class="text-muted mb-3">Listar conflictos, solapes y grupos incompletos.</p>
-            {{-- Este botón lleva a la vista principal de Auditoría (CU12) --}}
-            <a href="{{ route('coordinador.auditoria.index') }}" class="btn btn--primary">Listar Conflictos</a>
+            
+            <a href="<?php echo e(route('coordinador.auditoria.index')); ?>" class="btn btn--primary">Listar Conflictos</a>
         </div>
         
-        {{-- CU10/CU11: GESTIÓN DE PUBLICACIÓN --}}
+        
         <div class="card">
             <h2 style="margin:0 0 6px 0;">🔓 Gestión de Publicación</h2>
             <p class="text-muted mb-3">Publicar / Reabrir horarios del ciclo actual.</p>
-            {{-- Este botón lleva a la vista de alto impacto (CU10/CU11) --}}
-             <a href="{{ route('coordinador.gestion_ciclo.index') }}" class="btn btn--primary">Gestionar Ciclo</a>
+            
+             <a href="<?php echo e(route('coordinador.gestion_ciclo.index')); ?>" class="btn btn--primary">Gestionar Ciclo</a>
         </div>
 
     </div>
@@ -98,13 +96,13 @@
         </div>
       </div>
 
-      {{-- CTA al Editor Semanal (CU13) --}}
-      <a href="{{ route('cargas.editor') }}" class="btn btn--primary">🗓️ Editor semanal</a>
+      
+      <a href="<?php echo e(route('cargas.editor')); ?>" class="btn btn--primary">🗓️ Editor semanal</a>
     </div>
   </div>
 
-  {{-- Bloque superior: Acciones rápidas | Último período | Editor semanal --}}
-  @php
+  
+  <?php
     $statsUrl = \Illuminate\Support\Facades\Route::has('periodos.stats')
         ? route('periodos.stats') : url('/periodos/stats');
 
@@ -116,27 +114,27 @@
 
     $confIndex = \Illuminate\Support\Facades\Route::has('cargas.conflictos')
         ? route('cargas.conflictos') : $cargaIndex;
-  @endphp
+  ?>
 
   <div class="coor-grid-3">
-    {{-- Acciones rápidas --}}
+    
     <div class="card">
       <p class="subtle" style="margin:0 0 10px 0;">Acciones rápidas</p>
       <div class="card__actions">
-        <a href="{{ route('periodos.index') }}" class="btn btn--primary">➕ Crear período</a>
-        <a href="{{ route('periodos.index') }}" class="btn btn--tonal">📋 Ver/editar períodos</a>
-        <a href="{{ $cargaCreate }}" class="btn btn--outline">➕ Asignar carga (CU8)</a>
+        <a href="<?php echo e(route('periodos.index')); ?>" class="btn btn--primary">➕ Crear período</a>
+        <a href="<?php echo e(route('periodos.index')); ?>" class="btn btn--tonal">📋 Ver/editar períodos</a>
+        <a href="<?php echo e($cargaCreate); ?>" class="btn btn--outline">➕ Asignar carga (CU8)</a>
       </div>
       <p class="subtle" style="margin:10px 0 0 0">
-        También puedes revisar <a class="pill" href="{{ $confIndex }}">⚠️ Conflictos</a> y <a class="pill" href="{{ $cargaIndex }}">📚 Cargas</a>.
+        También puedes revisar <a class="pill" href="<?php echo e($confIndex); ?>">⚠️ Conflictos</a> y <a class="pill" href="<?php echo e($cargaIndex); ?>">📚 Cargas</a>.
       </p>
     </div>
 
-    {{-- Último período --}}
+    
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Último período</h3>
-      @isset($ultimo)
-        @php
+      <?php if(isset($ultimo)): ?>
+        <?php
           $fiIso = !empty($ultimo->fecha_inicio) ? \Illuminate\Support\Carbon::parse($ultimo->fecha_inicio)->toDateString() : null;
           $ffIso = !empty($ultimo->fecha_fin)    ? \Illuminate\Support\Carbon::parse($ultimo->fecha_fin)->toDateString()    : null;
           $uState = strtolower($ultimo->estado_publicacion ?? 'borrador');
@@ -145,31 +143,31 @@
             'borrador'=>'badge--outline','activo'=>'badge--tonal',
             'publicado'=>'badge--primary','archivado'=>'badge--text', default=>'badge--outline'
           };
-        @endphp
+        ?>
 
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-          <p class="mb-2" style="margin:0"><strong>{{ $ultimo->nombre ?? '—' }}</strong></p>
-          <span class="badge {{ $uBadge }}">{{ ucfirst($uState) }}</span>
+          <p class="mb-2" style="margin:0"><strong><?php echo e($ultimo->nombre ?? '—'); ?></strong></p>
+          <span class="badge <?php echo e($uBadge); ?>"><?php echo e(ucfirst($uState)); ?></span>
         </div>
 
         <p class="text-muted mb-2" style="margin:.5rem 0 0 0">
-          <time class="js-date" data-iso="{{ $fiIso }}">{{ $fiIso ?? '—' }}</time>
+          <time class="js-date" data-iso="<?php echo e($fiIso); ?>"><?php echo e($fiIso ?? '—'); ?></time>
           –
-          <time class="js-date" data-iso="{{ $ffIso }}">{{ $ffIso ?? '—' }}</time>
+          <time class="js-date" data-iso="<?php echo e($ffIso); ?>"><?php echo e($ffIso ?? '—'); ?></time>
         </p>
 
         <div class="card__actions" style="margin-top:10px">
-          <a href="{{ route('periodos.index') }}" class="btn btn--outline">Gestionar períodos</a>
-          {{-- abrir editor con el período preseleccionado vía query --}}
-          <a href="{{ route('cargas.editor') }}?id_periodo={{ $ultimo->id_periodo }}" class="btn btn--primary">🗓️ Abrir en Editor</a>
+          <a href="<?php echo e(route('periodos.index')); ?>" class="btn btn--outline">Gestionar períodos</a>
+          
+          <a href="<?php echo e(route('cargas.editor')); ?>?id_periodo=<?php echo e($ultimo->id_periodo); ?>" class="btn btn--primary">🗓️ Abrir en Editor</a>
         </div>
-      @else
+      <?php else: ?>
         <p class="text-muted" style="margin:0 0 .5rem 0;">Aún no hay períodos registrados.</p>
-        <a href="{{ route('periodos.index') }}" class="btn btn--primary">Crear el primero</a>
-      @endisset
+        <a href="<?php echo e(route('periodos.index')); ?>" class="btn btn--primary">Crear el primero</a>
+      <?php endif; ?>
     </div>
 
-    {{-- Editor semanal (resumen / acceso) --}}
+    
     <div class="card">
       <h3 style="margin:0 0 8px 0;">Editor semanal (CU13)</h3>
       <p class="subtle" style="margin:0 0 10px 0;">
@@ -181,27 +179,27 @@
         <li>Verde: posición válida</li>
       </ul>
       <div class="card__actions">
-        <a href="{{ route('cargas.editor') }}" class="btn btn--primary">Abrir editor</a>
-        <a href="{{ $cargaIndex }}" class="btn btn--tonal">Ver cargas</a>
+        <a href="<?php echo e(route('cargas.editor')); ?>" class="btn btn--primary">Abrir editor</a>
+        <a href="<?php echo e($cargaIndex); ?>" class="btn btn--tonal">Ver cargas</a>
       </div>
     </div>
   </div>
 
-  {{-- KPIs (con auto-actualización) --}}
-  <div class="card" style="padding:0" data-stats-url="{{ $statsUrl }}">
+  
+  <div class="card" style="padding:0" data-stats-url="<?php echo e($statsUrl); ?>">
     <div class="coor-kpis">
-      <div class="card coor-kpi"><h4>Total</h4><div id="kpi-total" class="num">{{ $stats['total'] ?? 0 }}</div></div>
-      <div class="card coor-kpi"><h4>Borrador</h4><div id="kpi-borrador" class="num">{{ $stats['borrador'] ?? 0 }}</div></div>
-      <div class="card coor-kpi"><h4>Activos</h4><div id="kpi-activo" class="num">{{ $stats['activo'] ?? 0 }}</div></div>
-      <div class="card coor-kpi"><h4>Publicados</h4><div id="kpi-publicado" class="num">{{ $stats['publicado'] ?? 0 }}</div></div>
-      @if(isset($stats['archivado']))
-        <div class="card coor-kpi"><h4>Archivados</h4><div id="kpi-archivado" class="num">{{ $stats['archivado'] ?? 0 }}</div></div>
-      @endif
+      <div class="card coor-kpi"><h4>Total</h4><div id="kpi-total" class="num"><?php echo e($stats['total'] ?? 0); ?></div></div>
+      <div class="card coor-kpi"><h4>Borrador</h4><div id="kpi-borrador" class="num"><?php echo e($stats['borrador'] ?? 0); ?></div></div>
+      <div class="card coor-kpi"><h4>Activos</h4><div id="kpi-activo" class="num"><?php echo e($stats['activo'] ?? 0); ?></div></div>
+      <div class="card coor-kpi"><h4>Publicados</h4><div id="kpi-publicado" class="num"><?php echo e($stats['publicado'] ?? 0); ?></div></div>
+      <?php if(isset($stats['archivado'])): ?>
+        <div class="card coor-kpi"><h4>Archivados</h4><div id="kpi-archivado" class="num"><?php echo e($stats['archivado'] ?? 0); ?></div></div>
+      <?php endif; ?>
     </div>
   </div>
 
-  {{-- Recientes --}}
-  @isset($recientes)
+  
+  <?php if(isset($recientes)): ?>
     <div class="card">
       <h3 style="margin:0 0 10px 0;">Períodos recientes</h3>
       <div class="coor-table-wrap">
@@ -216,8 +214,8 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
-            @forelse($recientes as $p)
-              @php
+            <?php $__empty_1 = true; $__currentLoopData = $recientes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $p): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+              <?php
                 $pfiIso = !empty($p->fecha_inicio) ? \Illuminate\Support\Carbon::parse($p->fecha_inicio)->toDateString() : null;
                 $pffIso = !empty($p->fecha_fin)    ? \Illuminate\Support\Carbon::parse($p->fecha_fin)->toDateString()    : null;
                 $st = strtolower($p->estado_publicacion ?? 'borrador');
@@ -226,31 +224,31 @@
                   'borrador'=>'badge--outline','activo'=>'badge--tonal',
                   'publicado'=>'badge--primary','archivado'=>'badge--text', default=>'badge--outline'
                 };
-              @endphp
+              ?>
               <tr>
-                <td class="coor-td">{{ $p->nombre ?? '—' }}</td>
-                <td class="coor-td"><time class="js-date" data-iso="{{ $pfiIso }}">{{ $pfiIso ?? '—' }}</time></td>
-                <td class="coor-td"><time class="js-date" data-iso="{{ $pffIso }}">{{ $pffIso ?? '—' }}</time></td>
-                <td class="coor-td"><span class="badge {{ $b }}">{{ ucfirst($st) }}</span></td>
+                <td class="coor-td"><?php echo e($p->nombre ?? '—'); ?></td>
+                <td class="coor-td"><time class="js-date" data-iso="<?php echo e($pfiIso); ?>"><?php echo e($pfiIso ?? '—'); ?></time></td>
+                <td class="coor-td"><time class="js-date" data-iso="<?php echo e($pffIso); ?>"><?php echo e($pffIso ?? '—'); ?></time></td>
+                <td class="coor-td"><span class="badge <?php echo e($b); ?>"><?php echo e(ucfirst($st)); ?></span></td>
                 <td class="coor-td">
                   <div class="card__actions">
-                    <a class="btn btn--outline" href="{{ route('periodos.index') }}">Gestionar</a>
-                    <a class="btn btn--primary" href="{{ route('cargas.editor') }}?id_periodo={{ $p->id_periodo }}">🗓️ Abrir en Editor</a>
+                    <a class="btn btn--outline" href="<?php echo e(route('periodos.index')); ?>">Gestionar</a>
+                    <a class="btn btn--primary" href="<?php echo e(route('cargas.editor')); ?>?id_periodo=<?php echo e($p->id_periodo); ?>">🗓️ Abrir en Editor</a>
                   </div>
                 </td>
               </tr>
-            @empty
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
               <tr><td colspan="5" class="coor-td text-center text-muted">Sin registros.</td></tr>
-            @endforelse
+            <?php endif; ?>
           </tbody>
         </table>
       </div>
     </div>
-  @endisset
+  <?php endif; ?>
 
 </div>
 
-{{-- JS: formato de fecha + KPIs en vivo --}}
+
 <script>
 (function(){
   const key = 'date_fmt';
@@ -303,4 +301,6 @@
   setInterval(refreshKPIs, 12000);
 })();
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\Users\user\Desktop\Larabel2\CargaHorariaFict\resources\views/coordinador/dashboard.blade.php ENDPATH**/ ?>

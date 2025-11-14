@@ -17,6 +17,17 @@ class PeriodoAcademicoController extends Controller
         return view('periodos.index', compact('periodos'));
     }
 
+    /**
+     * Devuelve los detalles de un período específico. Necesario por Route::apiResource.
+     * @param PeriodoAcademico $periodo
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function show(PeriodoAcademico $periodo)
+    {
+        // Dado que se usa apiResource, se asume que esta ruta es para API/JSON
+        return response()->json($periodo);
+    }
+
 
     public function store(Request $r)
     {
@@ -26,12 +37,12 @@ class PeriodoAcademicoController extends Controller
             'fecha_fin'    => ['required','date','after:fecha_inicio'],
         ]);
 
-       
+        
         if (PeriodoAcademico::haySolapamiento($data['fecha_inicio'], $data['fecha_fin'], null)) {
             return back()->withErrors(['fecha_inicio' => 'Rango solapado con otro período vigente.'])->withInput();
         }
 
-     
+      
         if (PeriodoAcademico::nombreUsado($data['nombre'])) {
             return back()->withErrors(['nombre' => 'Ya existe un período con ese nombre.'])->withInput();
         }
@@ -94,10 +105,10 @@ class PeriodoAcademicoController extends Controller
 
     /**
      * Cambios de estado:
-     * - 'activo'    => estado_publicacion sigue 'borrador', activo=true (valida solape)
-     * - 'borrador'  => sólo si estaba en borrador, activo=false (desactivar)
-     * - 'publicado' => estado_publicacion='publicado', activo=false (valida pendientes)
-     * - 'archivado' => estado_publicacion='archivado', activo=false (valida pendientes)
+     * - 'activo'     => estado_publicacion sigue 'borrador', activo=true (valida solape)
+     * - 'borrador'   => sólo si estaba en borrador, activo=false (desactivar)
+     * - 'publicado'  => estado_publicacion='publicado', activo=false (valida pendientes)
+     * - 'archivado'  => estado_publicacion='archivado', activo=false (valida pendientes)
      */
     public function cambiarEstado(Request $r, PeriodoAcademico $periodo)
     {
@@ -114,6 +125,7 @@ class PeriodoAcademicoController extends Controller
             if ($periodo->activo) {
                 return back()->withErrors(['estado'=>'El período ya está activo.']);
             }
+            // Importante: toDateString() debe usarse si fecha_inicio/fecha_fin son Carbon objects
             if (PeriodoAcademico::haySolapamiento(
                 $periodo->fecha_inicio->toDateString(),
                 $periodo->fecha_fin->toDateString(),
@@ -161,7 +173,7 @@ class PeriodoAcademicoController extends Controller
             return back()->with('ok','Período PUBLICADO.');
         }
 
-        // Archivado
+        // Archivado (Si el target no fue 'publicado', asume 'archivado' al final)
         if (CargaHoraria::tieneAsignacionesAbiertas($periodo->getKey())) {
             return back()->withErrors(['estado'=>'No puede archivarse: existen procesos abiertos.']);
         }
@@ -207,37 +219,33 @@ class PeriodoAcademicoController extends Controller
             if (!class_exists(\App\Models\Bitacora::class)) return;
 
             \App\Models\Bitacora::create([
-                'accion'        => $accion,
-                'usuario_id'    => Auth::id(),
-                'ip'            => $r->ip(),
-                'descripcion'   => json_encode($detalle, JSON_UNESCAPED_UNICODE),
-                'entidad'       => $entidad,
-                'entidad_id'    => $entidadId,
-                'fecha_creacion'=> now(),
+                'accion'          => $accion,
+                'usuario_id'      => Auth::id(),
+                'ip'              => $r->ip(),
+                'descripcion'     => json_encode($detalle, JSON_UNESCAPED_UNICODE),
+                'entidad'         => $entidad,
+                'entidad_id'      => $entidadId,
+                'fecha_creacion'  => now(),
             ]);
         } catch (\Throwable $e) {
             Log::warning('bitacora.fail', ['accion'=>$accion,'msg'=>$e->getMessage()]);
         }
     }
 
+    // ✅ CORRECCIÓN FINAL: Usar Eloquent en stats() para mayor portabilidad y limpieza.
     public function stats()
-{
-    $row = \DB::selectOne("
-        SELECT
-            COUNT(*)                                                        AS total,
-            COUNT(*) FILTER (WHERE estado_publicacion = 'borrador')         AS borrador,
-            COUNT(*) FILTER (WHERE estado_publicacion = 'publicado')        AS publicado,
-            COUNT(*) FILTER (WHERE estado_publicacion = 'archivado')        AS archivado,
-            COUNT(*) FILTER (WHERE activo)                                  AS activo
-        FROM periodo_academico
-    ");
+    {
+        // Se inicializa el query builder.
+        $q = PeriodoAcademico::query();
 
-    return response()->json([
-        'total'      => (int)($row->total ?? 0),
-        'borrador'   => (int)($row->borrador ?? 0),
-        'activo'     => (int)($row->activo ?? 0),
-        'publicado'  => (int)($row->publicado ?? 0),
-        'archivado'  => (int)($row->archivado ?? 0),
-    ]);
-}
+        return response()->json([
+            'total'      => $q->count(), // Count total
+            // Se usa clone para aplicar filtros a una copia, evitando que se acumulen
+            'borrador'   => (clone $q)->where('estado_publicacion', 'borrador')->count(),
+            'publicado'  => (clone $q)->where('estado_publicacion', 'publicado')->count(),
+            'archivado'  => (clone $q)->where('estado_publicacion', 'archivado')->count(),
+            // Se usa el campo booleano 'activo'
+            'activo'     => (clone $q)->where('activo', true)->count(), 
+        ]);
+    }
 }

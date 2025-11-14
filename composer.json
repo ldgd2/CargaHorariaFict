@@ -10,6 +10,9 @@
         "barryvdh/laravel-dompdf": "^3.1",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
+        "maatwebsite/excel": "^4.0@dev",
+        "maennchen/zipstream-php": "3.1.2",
+        "phpoffice/phpspreadsheet": "^5.2",
         "rap2hpoutre/fast-excel": "^5.6"
     },
     "require-dev": {

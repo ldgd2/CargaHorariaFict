@@ -59,12 +59,12 @@
    API endpoints (named routes)
    ========================= */
 const API = {
-  index : "{{ route('admin.carreras.index') }}",        // GET ?q=&per_page=
-  store : "{{ route('admin.carreras.store') }}",        // POST
+  index : "{{ route('carreras.index') }}",        // GET ?q=&per_page=
+  store : "{{ route('carreras.store') }}",        // POST
   update: id => "{{ url('admin/carreras') }}/"+id,      // POST + _method=PUT
   toggle: id => "{{ url('admin/carreras') }}/"+id+"/toggle", // PATCH
   docentes: (params={}) => {
-    const u = new URL("{{ route('admin.docentes.index') }}", window.location.origin);
+    const u = new URL("{{ route('docentes.index') }}", window.location.origin);
     if (params.per_page) u.searchParams.set('per_page', params.per_page);
     if (params.q)        u.searchParams.set('q', params.q);
     return u;

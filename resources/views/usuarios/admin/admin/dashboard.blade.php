@@ -31,7 +31,7 @@
     <div class="card">
       <h2 style="margin:0 0 6px 0;">Carreras</h2>
       <p class="text-muted mb-3">Catálogo de carreras.</p>
-      <a href="{{ route('admin.carreras.view') }}" class="btn btn--tonal">Abrir</a>
+      <a href="{{ route('admin.carreras.view') }}" class="btn btn--primary">Abrir</a>
     </div>
 
     {{-- MATERIAS --}}

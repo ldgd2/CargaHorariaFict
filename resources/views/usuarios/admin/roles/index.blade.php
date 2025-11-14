@@ -129,7 +129,7 @@
                     </details>
 
                     {{-- Toggle --}}
-                    <form method="POST" action="{{ route('roles.toggle', $rol) }}" style="display:inline-block">
+                    <form method="POST" action="{{ route('admin.roles.toggle', $rol) }}" style="display:inline-block">
                       @csrf @method('PATCH')
                       <button class="btn btn--tonal" type="submit">
                         {{ $rol->habilitado ? 'Inhabilitar' : 'Habilitar' }}
@@ -165,7 +165,7 @@
 
       {{-- Asignar --}}
       <div class="card" style="margin-bottom:16px">
-        <form method="POST" action="{{ route('roles.asignar') }}">
+        <form method="POST" action="{{ route('admin.roles.asignar') }}">
           @csrf
 
           <div class="grid grid--2">
@@ -214,7 +214,7 @@
 
       {{-- Revocar --}}
       <div class="card">
-        <form method="POST" action="{{ route('roles.revocar') }}">
+        <form method="POST" action="{{ route('admin.roles.revocar') }}">
           @csrf @method('DELETE')
 
           <h3 style="margin:0 0 10px 0">Revocar rol</h3>
