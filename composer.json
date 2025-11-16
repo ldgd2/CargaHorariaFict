@@ -13,7 +13,8 @@
         "maatwebsite/excel": "^4.0@dev",
         "maennchen/zipstream-php": "3.1.2",
         "phpoffice/phpspreadsheet": "^5.2",
-        "rap2hpoutre/fast-excel": "^5.6"
+        "rap2hpoutre/fast-excel": "^5.6",
+        "simplesoftwareio/simple-qrcode": "^4.2"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.6",

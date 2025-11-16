@@ -136,6 +136,35 @@ Route::middleware('auth')->group(function () {
         )->name('api.docente.disponibilidad');
     });
 
+
+      /*
+    |--------------------------------------
+    | ASISTENCIA + QR
+    |--------------------------------------
+    */
+
+    // Página del coordinador: selector / generador de QR
+ // --- COORDINADOR ---
+Route::prefix('coordinador')->as('coordinador.')->middleware(['auth'])->group(function () {
+    Route::get('/asistencia/qr/selector', [AsistenciaSesionController::class, 'selectorQr'])->name('asistencia.qr.selector');
+    Route::get('/materias/{idCarrera}/materias', [AsistenciaSesionController::class, 'obtenerMateriasPorCarrera']);
+    Route::get('/materias/{idMateria}/docentes', [AsistenciaSesionController::class, 'obtenerDocentesPorMateria']);
+    Route::get('/generar-qr/{cargaId}', [AsistenciaSesionController::class, 'generarQr']);
+});
+
+    Route::get('/coordinador/kpi', [CoordinadorController::class, 'kpiGeneral'])
+    ->name('coordinador.kpi.general');
+    Route::get('/coordinador/docentes/{docente}/kpi', [CoordinadorController::class, 'docenteKpi'])
+        ->name('coordinador.docente.kpi');
+
+    Route::prefix('docente')->as('docente.')->group(function () {
+        Route::get('/asistencia/qr/marcar/{carga}/{fecha}', [AsistenciaSesionController::class, 'marcarDesdeQr'])->name('asistencia.marcar');
+    });
+    // API REST de asistencia
+    Route::apiResource('asistencia-sesion', AsistenciaSesionController::class)->parameters([
+        'asistencia-sesion' => 'id',
+    ]);
+
     // ---------------------------
     // Resources / APIs del sistema
     // ---------------------------
