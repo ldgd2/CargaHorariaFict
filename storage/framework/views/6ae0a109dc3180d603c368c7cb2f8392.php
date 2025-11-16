@@ -1,7 +1,6 @@
-@extends('layouts.app')
-@section('title','Editor semanal (CU13)')
+<?php $__env->startSection('title','Editor semanal (CU13)'); ?>
 
-@section('content')
+<?php $__env->startSection('content'); ?>
   <div class="app-container" style="display:grid;gap:12px">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <h1 style="margin:0">Editor semanal (CU13)</h1>
@@ -18,9 +17,9 @@
         <label>Período</label>
         <select id="id_periodo">
           <option value="">-- seleccionar --</option>
-          @foreach($periodos as $p)
-            <option value="{{ $p->id_periodo }}">{{ $p->nombre }}</option>
-          @endforeach
+          <?php $__currentLoopData = $periodos; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $p): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option value="<?php echo e($p->id_periodo); ?>"><?php echo e($p->nombre); ?></option>
+          <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </select>
       </div>
 
@@ -36,9 +35,9 @@
         <label>Docente</label>
         <select id="id_docente">
           <option value="">-- todos --</option>
-          @foreach($docentes as $d)
-            <option value="{{ $d->id_docente }}">{{ $d->nombre_completo }}</option>
-          @endforeach
+          <?php $__currentLoopData = $docentes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $d): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option value="<?php echo e($d->id_docente); ?>"><?php echo e($d->nombre_completo); ?></option>
+          <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </select>
       </div>
 
@@ -46,9 +45,9 @@
         <label>Carrera</label>
         <select id="id_carrera">
           <option value="">-- todas --</option>
-          @foreach($carreras ?? [] as $c)
-            <option value="{{ $c->id_carrera }}">{{ $c->nombre }}</option>
-          @endforeach
+          <?php $__currentLoopData = $carreras ?? []; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $c): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option value="<?php echo e($c->id_carrera); ?>"><?php echo e($c->nombre); ?></option>
+          <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </select>
       </div>
 
@@ -56,9 +55,9 @@
         <label>Materia</label>
         <select id="id_materia">
           <option value="">-- todas --</option>
-          @foreach($materias ?? [] as $m)
-            <option data-carrera="{{ $m->id_carrera ?? '' }}" value="{{ $m->id_materia }}">{{ $m->nombre }}</option>
-          @endforeach
+          <?php $__currentLoopData = $materias ?? []; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $m): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option data-carrera="<?php echo e($m->id_carrera ?? ''); ?>" value="<?php echo e($m->id_materia); ?>"><?php echo e($m->nombre); ?></option>
+          <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </select>
       </div>
 
@@ -66,9 +65,9 @@
         <label>Aula</label>
         <select id="id_aula">
           <option value="">-- todas --</option>
-          @foreach($aulas as $a)
-            <option value="{{ $a->id_aula }}">{{ $a->codigo }}</option>
-          @endforeach
+          <?php $__currentLoopData = $aulas; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $a): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <option value="<?php echo e($a->id_aula); ?>"><?php echo e($a->codigo); ?></option>
+          <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </select>
       </div>
 
@@ -123,18 +122,18 @@
     }
   </style>
 
-  @vite(['resources/css/app.css','resources/js/app.js'])
+  <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css','resources/js/app.js']); ?>
 
   <script>
   (function(){
-  const gridUrl = "{{ route('cargas.grid') }}";
-  const dragUrl = "{{ route('cargas.drag') }}";
-  const checkUrl = "{{ route('cargas.check') }}";
-  const csrf = '{{ csrf_token() }}';
-  const MATERIAS = @json($materias ?? []);
-  const CARRERAS = @json($carreras ?? []);
-  const DOCENTES = @json($docentes->map(function($d){ return ['id'=>$d->id_docente,'nombre'=> $d->nombre_completo]; }) ?? []);
-  const AULAS = @json($aulas->map(function($a){ return ['id'=>$a->id_aula,'codigo'=> $a->codigo]; }) ?? []);
+  const gridUrl = "<?php echo e(route('cargas.grid')); ?>";
+  const dragUrl = "<?php echo e(route('cargas.drag')); ?>";
+  const checkUrl = "<?php echo e(route('cargas.check')); ?>";
+  const csrf = '<?php echo e(csrf_token()); ?>';
+  const MATERIAS = <?php echo json_encode($materias ?? [], 15, 512) ?>;
+  const CARRERAS = <?php echo json_encode($carreras ?? [], 15, 512) ?>;
+  const DOCENTES = <?php echo json_encode($docentes->map(function($d){ return ['id'=>$d->id_docente, 'nombre'=> $d->nombre_completo]; }) ?? [], 512) ?>;
+  const AULAS = <?php echo json_encode($aulas->map(function($a){ return ['id'=>$a->id_aula, 'codigo'=> $a->codigo]; }) ?? [], 512) ?>;
 
   let state = { cargas:[], disponibilidades:[], bloqueos:[], pendientes:[] };
   let __renderGridRetry = 0;
@@ -185,7 +184,7 @@
       const container = document.getElementById('hours-list'); container.innerHTML='';
       if (Object.keys(map).length===0) { container.innerText = 'Sin asignaciones'; return; }
       // map of docentes provided server-side
-      const DOC_MAP = @json($docentes->pluck('nombre_completo','id_docente') ?? []);
+      const DOC_MAP = <?php echo json_encode($docentes->pluck('nombre_completo', 'id_docente') ?? [], 512) ?>;
       Object.keys(map).forEach(id=>{
         const d = (DOC_MAP || {})[id] || id;
         const hours = Math.floor(map[id]/60); const mins = map[id]%60;
@@ -454,4 +453,6 @@
   })();
   </script>
 
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\Users\ldgd2\OneDrive\Documentos\Universidad\si1\Examen\CargaHorariaFict\resources\views/carga/editor-semanal.blade.php ENDPATH**/ ?>

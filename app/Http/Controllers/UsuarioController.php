@@ -34,6 +34,28 @@ class UsuarioController extends Controller
             ->orderBy('id_usuario','desc')
             ->paginate(20);
     }
+    
+    /**
+     * Busca un Rol por texto (insensible a mayúsculas) y lo crea si no existe.
+     * Devuelve la instancia de Rol o null si falla.
+     */
+    private function obtenerOCrearRolPorTexto(?string $texto): ?Rol
+    {
+        if (!$texto) return null;
+        $nombre = trim((string)$texto);
+        $lower = mb_strtolower($nombre);
+
+        $rol = Rol::whereRaw('LOWER(nombre_rol) = ?', [$lower])->first();
+        if ($rol) return $rol;
+
+        try {
+            $title = mb_convert_case($nombre, MB_CASE_TITLE, 'UTF-8');
+            return Rol::create(['nombre_rol' => $title, 'habilitado' => true]);
+        } catch (\Throwable $e) {
+            Log::warning('import.rol_create_fail', ['texto' => $texto, 'msg' => $e->getMessage()]);
+            return null;
+        }
+    }
 
     public function show(Usuario $usuario)
     {
@@ -277,6 +299,16 @@ class UsuarioController extends Controller
             return back()->withErrors(['archivo' => 'No se pudo leer el Excel. Verifique formato/hojas.']);
         }
 
+        // Detectar si el archivo contiene hojas del paquete multi-hojas (ej. CARRERAS, AULAS, PERIODOS...) 
+        $multiSheets = ['USUARIOS','CARRERAS','AULAS','PERIODOS','MATERIAS','GRUPOS','CARGA_HORARIA','DISPONIBILIDAD'];
+        foreach ($spreadsheet->getWorksheetIterator() as $ws) {
+            $title = strtoupper(preg_replace('/[^A-Za-z0-9]+/u', '_', trim($ws->getTitle())));
+            if (in_array($title, $multiSheets, true) && $title !== 'USUARIOS') {
+                Log::warning('import.detected_multi_sheet_file', ['archivo'=>$request->file('archivo')->getClientOriginalName(),'sheet'=>$title]);
+                return back()->with('warning', "El archivo parece contener hojas de importación multi-hojas (ej: {$title}). Por favor use la pantalla Importación (Admin → Importación) para subir este archivo.");
+            }
+        }
+
         // Detectar cómo se relaciona Estudiante en tu esquema:
         // - Si existe la columna id_usuario en estudiante: usamos id_usuario como FK
         // - Si no existe: usamos id_estudiante = id_usuario del usuario
@@ -291,8 +323,8 @@ class UsuarioController extends Controller
             $tituloHoja = trim($worksheet->getTitle());
             $rolSlug = mb_strtolower($tituloHoja);
 
-            // 1) Rol por nombre exacto de hoja
-            $rol = Rol::whereRaw('LOWER(nombre_rol) = ?', [$rolSlug])->first();
+            // 1) Resolver o crear rol a partir del nombre de la hoja (insensible a mayúsculas)
+            $rol = $this->obtenerOCrearRolPorTexto($tituloHoja);
             if (!$rol) {
                 Log::warning('import.rol_no_existe', ['hoja' => $tituloHoja]);
                 $hojas_omitidas[] = $tituloHoja;
@@ -323,6 +355,19 @@ class UsuarioController extends Controller
             $headers = [];
             foreach ($headersRaw as $col => $label) {
                 $headers[$col] = $norm($label);
+            }
+
+            // --- DETECTAR SI ESTA HOJA PARECE UNA LISTA DE USUARIOS ---
+            $headersNormalized = array_map(fn($v)=>trim((string)$v), array_values($headers));
+            $possibleEmailNames = array_map(fn($a)=>$norm($a), ['email', 'correo', 'correo electronico', 'e-mail']);
+            $hasEmailHeader = false;
+            foreach ($headersNormalized as $h) {
+                if (in_array($h, $possibleEmailNames, true)) { $hasEmailHeader = true; break; }
+            }
+            if (!$hasEmailHeader) {
+                Log::warning('import.hoja_no_es_usuarios', ['hoja'=>$tituloHoja, 'headers'=>$headers]);
+                $hojas_omitidas[] = $tituloHoja;
+                continue; // skip this sheet instead of trying to parse it as users
             }
 
             // Helper para obtener valor por nombre lógico de campo
@@ -358,7 +403,7 @@ class UsuarioController extends Controller
             $error_en_hoja = false;
 
             foreach ($rows as $idx => $row) {
-                $fila = $idx; // ya está 2-based por toArray; usamos idx directo
+                $fila = $idx; 
 
                 $nombre    = $get($row, $headers, $ALIAS_NOMBRE);
                 $apellido  = $get($row, $headers, $ALIAS_APELLIDO);
@@ -445,8 +490,7 @@ class UsuarioController extends Controller
                 ]
             );
         } else {
-            // No hay columna id_usuario → NO forzar id_estudiante (puede ser autoincrement).
-            // Abortamos SOLO esta hoja con explicación clara:
+
             \Log::error('import.estudiante_sin_id_usuario', [
                 'hoja' => $tituloHoja,
                 'fila' => $fila,
@@ -471,7 +515,6 @@ class UsuarioController extends Controller
         ]);
 
     } catch (\Illuminate\Database\QueryException $qe) {
-        // Captura de error de BD con detalle
         $sqlState = $qe->errorInfo[0] ?? null;
         $detail   = $qe->errorInfo[2] ?? $qe->getMessage();
         \Log::error('import.estudiante_query_error', [

@@ -1,18 +1,17 @@
-@extends('layouts.app')
-@section('title','Importación masiva')
+<?php $__env->startSection('title','Importación masiva'); ?>
 
-@section('content')
+<?php $__env->startSection('content'); ?>
 <div class="app-container">
   <div class="card">
     <h2 class="appbar__title" style="margin:0">Importación CSV/XLSX</h2>
     <p class="text-muted">Soporta varias hojas en un mismo archivo. Se detecta por el <strong>nombre de la hoja</strong>.</p>
   </div>
 
-  {{-- Result will be shown at the end of the page after the form --}}
+  
 
   <div class="card">
-    <form method="post" action="{{ route('admin.import.run') }}" enctype="multipart/form-data" style="display:grid;gap:12px">
-      @csrf
+    <form method="post" action="<?php echo e(route('admin.import.run')); ?>" enctype="multipart/form-data" style="display:grid;gap:12px">
+      <?php echo csrf_field(); ?>
       <div class="field">
         <div class="alert alert--info">Este formulario usa el importador multi-hojas (ImportacionController). Si quieres importar usuarios individuales usa la pantalla de Usuarios → Importar.</div>
       </div>
@@ -26,25 +25,27 @@
       <button class="btn btn--primary" type="submit">Importar (multi-hojas)</button>
     </form>
   </div>
-  {{-- Mostrar resultados/import messages al final de la página --}}
-  @if (session('ok'))
+  
+  <?php if(session('ok')): ?>
     <div class="card card--success" style="margin-top:16px;border-left:4px solid #2ecc71;">
       <h3 style="margin-top:0">Importación completada</h3>
       <p class="text-muted">Los datos se importaron correctamente. Resumen por hoja:</p>
-      <div class="import-summary">{!! session('ok') !!}</div>
+      <div class="import-summary"><?php echo session('ok'); ?></div>
     </div>
-  @endif
-  @if ($errors->any())
+  <?php endif; ?>
+  <?php if($errors->any()): ?>
     <div class="card card--error" style="margin-top:12px;border-left:4px solid #e74c3c;">
       <h3 style="margin-top:0">Errores / Filas omitidas</h3>
       <div class="import-errors">
         <ul style="margin:0 0 0 18px;">
-        @foreach ($errors->all() as $e)
-          <li>{{ $e }}</li>
-        @endforeach
+        <?php $__currentLoopData = $errors->all(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $e): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+          <li><?php echo e($e); ?></li>
+        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
         </ul>
       </div>
     </div>
-  @endif
+  <?php endif; ?>
 </div>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\Users\ldgd2\OneDrive\Documentos\Universidad\si1\Examen\CargaHorariaFict\resources\views/usuarios/admin/importacion/importacion.blade.php ENDPATH**/ ?>
